@@ -10,16 +10,15 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"iter"
 	"net/http"
 	"net/http/cookiejar"
 	"os"
 	"os/signal"
-	"slices"
 	"strings"
 	"time"
 
 	"github.com/goccy/go-yaml"
+	"github.com/maruel/devpostdash/dom"
 	"github.com/maruel/roundtrippers"
 	"golang.org/x/net/html"
 	"golang.org/x/sync/errgroup"
@@ -133,13 +132,13 @@ func parseProjects(r io.Reader) ([]project, error) {
 	if err != nil {
 		return nil, err
 	}
-	galleryNode := getFirstChild(doc, withTag("div"), withID("submission-gallery"))
+	galleryNode := dom.FirstChild(doc, dom.Tag("div"), dom.ID("submission-gallery"))
 	if galleryNode == nil {
 		// No gallery found on this page, which is the end of pagination
 		return nil, nil
 	}
 	var projects []project
-	for c := range yieldChildren(galleryNode, withTag("div"), withClass("gallery-item")) {
+	for c := range dom.YieldChildren(galleryNode, dom.Tag("div"), dom.Class("gallery-item")) {
 		projects = append(projects, parseProjectNode(c))
 	}
 	return projects, nil
@@ -147,26 +146,26 @@ func parseProjects(r io.Reader) ([]project, error) {
 
 func parseProjectNode(n *html.Node) project {
 	p := project{}
-	p.ID = getNodeAttr(n, "data-software-id")
-	if linkNode := getFirstChild(n, withTag("a"), withClass("block-wrapper-link")); linkNode != nil {
-		p.URL = getNodeAttr(linkNode, "href")
-		if imgNode := getFirstChild(linkNode, withTag("img"), withClass("software_thumbnail_image")); imgNode != nil {
-			p.Image = getNodeAttr(imgNode, "src")
+	p.ID = dom.NodeAttr(n, "data-software-id")
+	if linkNode := dom.FirstChild(n, dom.Tag("a"), dom.Class("block-wrapper-link")); linkNode != nil {
+		p.URL = dom.NodeAttr(linkNode, "href")
+		if imgNode := dom.FirstChild(linkNode, dom.Tag("img"), dom.Class("software_thumbnail_image")); imgNode != nil {
+			p.Image = dom.NodeAttr(imgNode, "src")
 		}
 	}
-	if titleNode := getFirstChild(n, withTag("h5")); titleNode != nil {
-		p.Title = getNodeTextContent(titleNode)
+	if titleNode := dom.FirstChild(n, dom.Tag("h5")); titleNode != nil {
+		p.Title = dom.NodeTextContent(titleNode)
 	}
-	if taglineNode := getFirstChild(n, withTag("p"), withClass("tagline")); taglineNode != nil {
-		p.Tagline = getNodeTextContent(taglineNode)
+	if taglineNode := dom.FirstChild(n, dom.Tag("p"), dom.Class("tagline")); taglineNode != nil {
+		p.Tagline = dom.NodeTextContent(taglineNode)
 	}
-	if winnerNode := getFirstChild(n, withTag("aside"), withClass("entry-badge")); winnerNode != nil {
+	if winnerNode := dom.FirstChild(n, dom.Tag("aside"), dom.Class("entry-badge")); winnerNode != nil {
 		p.Winner = true
 	}
 	var teamNames []string
-	for c := range yieldChildren(n, withTag("span"), withClass("user-profile-link")) {
-		if imgNode := getFirstChild(c, withTag("img")); imgNode != nil {
-			teamNames = append(teamNames, getNodeAttr(imgNode, "alt"))
+	for c := range dom.YieldChildren(n, dom.Tag("span"), dom.Class("user-profile-link")) {
+		if imgNode := dom.FirstChild(c, dom.Tag("img")); imgNode != nil {
+			teamNames = append(teamNames, dom.NodeAttr(imgNode, "alt"))
 		}
 	}
 	p.Team = strings.Join(teamNames, ", ")
@@ -184,8 +183,8 @@ func (d *devpostClient) fetchProject(ctx context.Context, project *project) erro
 	if err != nil {
 		return err
 	}
-	if d := getFirstChild(doc, withTag("div"), withClass("app-details-left")); d != nil {
-		project.Description = getNodeTextContent(d)
+	if d := dom.FirstChild(doc, dom.Tag("div"), dom.Class("app-details-left")); d != nil {
+		project.Description = dom.NodeTextContent(d)
 	}
 	return nil
 }
@@ -200,86 +199,6 @@ func trimResponseHeaders(i *cassette.Interaction) error {
 	i.Response.Headers.Del("X-Request-Id")
 	i.Response.Duration = i.Response.Duration.Round(time.Millisecond)
 	return nil
-}
-
-// Generic HTML parsing code.
-
-type nodeSelector func(*html.Node) bool
-
-func withTag(tagName string) nodeSelector {
-	return func(n *html.Node) bool {
-		return n.Type == html.ElementNode && n.Data == tagName
-	}
-}
-
-func withAttr(key, val string) nodeSelector {
-	return func(n *html.Node) bool {
-		return n.Type == html.ElementNode && getNodeAttr(n, key) == val
-	}
-}
-
-func withClass(className string) nodeSelector {
-	return func(n *html.Node) bool {
-		return n.Type == html.ElementNode && slices.Contains(strings.Split(getNodeAttr(n, "class"), " "), className)
-	}
-}
-
-func withID(id string) nodeSelector {
-	return withAttr("id", id)
-}
-
-func withType(t html.NodeType) nodeSelector {
-	return func(n *html.Node) bool { return n.Type == t }
-}
-
-// yieldChildren travel the tree with the filter specified, traversing depth first.
-func yieldChildren(n *html.Node, filters ...nodeSelector) iter.Seq[*html.Node] {
-	return func(yield func(*html.Node) bool) {
-		ok := true
-		for _, f := range filters {
-			if !f(n) {
-				ok = false
-				break
-			}
-		}
-		if ok && !yield(n) {
-			return
-		}
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			for m := range yieldChildren(c, filters...) {
-				if !yield(m) {
-					return
-				}
-			}
-		}
-	}
-}
-
-// getFirstChild travel the tree with the filter specified and returns the first node found.
-func getFirstChild(n *html.Node, filters ...nodeSelector) *html.Node {
-	for n := range yieldChildren(n, filters...) {
-		return n
-	}
-	return nil
-}
-
-// getNodeAttr returns the attribute of an html node if it exists.
-func getNodeAttr(n *html.Node, key string) string {
-	for _, a := range n.Attr {
-		if a.Key == key {
-			return a.Val
-		}
-	}
-	return ""
-}
-
-// getNodeTextContent returns the text as processed in HTML.
-func getNodeTextContent(n *html.Node) string {
-	buf := bytes.Buffer{}
-	for c := range yieldChildren(n, withType(html.TextNode)) {
-		buf.WriteString(c.Data)
-	}
-	return strings.TrimSpace(buf.String())
 }
 
 //
