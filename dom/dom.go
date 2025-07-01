@@ -95,5 +95,5 @@ func NodeTextContent(n *html.Node) string {
 	for c := range YieldChildren(n, Type(html.TextNode)) {
 		buf.WriteString(c.Data)
 	}
-	return strings.TrimSpace(buf.String())
+	return strings.Join(strings.Fields(buf.String()), " ")
 }
