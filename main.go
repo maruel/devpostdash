@@ -154,10 +154,10 @@ func parseProjectNode(n *html.Node) project {
 		}
 	}
 	if titleNode := dom.FirstChild(n, dom.Tag("h5")); titleNode != nil {
-		p.Title = dom.NodeTextContent(titleNode)
+		p.Title = dom.NodeText(titleNode)
 	}
 	if taglineNode := dom.FirstChild(n, dom.Tag("p"), dom.Class("tagline")); taglineNode != nil {
-		p.Tagline = dom.NodeTextContent(taglineNode)
+		p.Tagline = dom.NodeText(taglineNode)
 	}
 	if winnerNode := dom.FirstChild(n, dom.Tag("aside"), dom.Class("entry-badge")); winnerNode != nil {
 		p.Winner = true
@@ -184,7 +184,7 @@ func (d *devpostClient) fetchProject(ctx context.Context, project *project) erro
 		return err
 	}
 	if d := dom.FirstChild(doc, dom.Tag("div"), dom.ID("app-details-left")); d != nil {
-		project.Description = dom.NodeTextContent(d)
+		project.Description = dom.NodeText(d)
 	}
 	return nil
 }

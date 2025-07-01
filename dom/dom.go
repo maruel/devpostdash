@@ -89,8 +89,8 @@ func NodeAttr(n *html.Node, key string) string {
 	return ""
 }
 
-// NodeTextContent returns the text as processed in HTML.
-func NodeTextContent(n *html.Node) string {
+// NodeText returns the text as processed in HTML.
+func NodeText(n *html.Node) string {
 	buf := bytes.Buffer{}
 	for c := range YieldChildren(n, Type(html.TextNode)) {
 		buf.WriteString(c.Data)
