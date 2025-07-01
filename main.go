@@ -184,7 +184,7 @@ func (d *devpostClient) fetchProject(ctx context.Context, project *project) erro
 		return err
 	}
 	if d := dom.FirstChild(doc, dom.Tag("div"), dom.ID("app-details-left")); d != nil {
-		project.Description = dom.NodeText(d)
+		project.Description = dom.NodeMarkdown(d)
 	}
 	return nil
 }
