@@ -22,6 +22,7 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/maruel/roundtrippers"
 	"golang.org/x/net/html"
+	"golang.org/x/sync/errgroup"
 	"gopkg.in/dnaeon/go-vcr.v4/pkg/cassette"
 	"gopkg.in/dnaeon/go-vcr.v4/pkg/recorder"
 )
@@ -95,15 +96,14 @@ func (d *devpost) fetchProjectsInternal(ctx context.Context) ([]byte, error) {
 */
 
 type project struct {
-	ID             string
-	Title          string
-	URL            string
-	Tagline        string
-	Image          string
-	Description    string
-	Winner         bool
-	Team           string
-	SubmissionDate string
+	ID          string
+	Title       string
+	URL         string
+	Tagline     string
+	Image       string
+	Winner      bool
+	Team        string
+	Description string
 }
 
 func (d *devpostClient) fetchProjects(ctx context.Context) ([]project, error) {
@@ -147,50 +147,51 @@ func parseProjects(r io.Reader) ([]project, error) {
 
 func parseProjectNode(n *html.Node) project {
 	p := project{}
-	if idNode := getFirstChild(n, withTag("a"), withClass("block-link")); idNode != nil {
-		p.ID = getNodeAttr(idNode, "data-content-id")
-		p.URL = getNodeAttr(idNode, "href")
-	}
-	if titleNode := getFirstChild(n, withTag("h5"), withClass("content-title")); titleNode != nil {
-		if aNode := getFirstChild(titleNode, withTag("a")); aNode != nil {
-			p.Title = aNode.FirstChild.Data
+	p.ID = getNodeAttr(n, "data-software-id")
+	if linkNode := getFirstChild(n, withTag("a"), withClass("block-wrapper-link")); linkNode != nil {
+		p.URL = getNodeAttr(linkNode, "href")
+		if imgNode := getFirstChild(linkNode, withTag("img"), withClass("software_thumbnail_image")); imgNode != nil {
+			p.Image = getNodeAttr(imgNode, "src")
 		}
+	}
+	if titleNode := getFirstChild(n, withTag("h5")); titleNode != nil {
+		p.Title = getNodeTextContent(titleNode)
 	}
 	if taglineNode := getFirstChild(n, withTag("p"), withClass("tagline")); taglineNode != nil {
-		p.Tagline = strings.TrimSpace(taglineNode.FirstChild.Data)
+		p.Tagline = getNodeTextContent(taglineNode)
 	}
-	if imgNode := getFirstChild(n, withTag("img"), withClass("project-card-img")); imgNode != nil {
-		p.Image = getNodeAttr(imgNode, "src")
-	}
-	if descNode := getFirstChild(n, withTag("div"), withClass("description")); descNode != nil {
-		p.Description = descNode.FirstChild.Data
-	}
-	if winnerNode := getFirstChild(n, withTag("div"), withClass("winner-flag")); winnerNode != nil {
+	if winnerNode := getFirstChild(n, withTag("aside"), withClass("entry-badge")); winnerNode != nil {
 		p.Winner = true
 	}
-	if teamNode := getFirstChild(n, withTag("p"), withClass("team-name")); teamNode != nil {
-		if aNode := getFirstChild(teamNode, withTag("a")); aNode != nil {
-			p.Team = aNode.FirstChild.Data
-		} else {
-			p.Team = teamNode.FirstChild.Data
+	var teamNames []string
+	for c := range yieldChildren(n, withTag("span"), withClass("user-profile-link")) {
+		if imgNode := getFirstChild(c, withTag("img")); imgNode != nil {
+			teamNames = append(teamNames, getNodeAttr(imgNode, "alt"))
 		}
 	}
-	if dateNode := getFirstChild(n, withTag("p"), withClass("submission-date")); dateNode != nil {
-		p.SubmissionDate = dateNode.FirstChild.Data
-	}
+	p.Team = strings.Join(teamNames, ", ")
+	// Description is not directly available on the project card.
 	return p
 }
 
-func (d *devpostClient) fetchProject(ctx context.Context, projectID string) ([]byte, error) {
-	url := "https://" + d.name + ".devpost.com/submissions/" + projectID
-	bod, err := d.get(ctx, url)
-	// TODO: Parse the project page and extract useful information.
-	return bod, err
+func (d *devpostClient) fetchProject(ctx context.Context, project *project) error {
+	// url := "https://" + d.name + ".devpost.com/submissions/" + project.ID
+	bod, err := d.get(ctx, project.URL)
+	if err != nil {
+		return err
+	}
+	doc, err := html.Parse(bytes.NewReader(bod))
+	if err != nil {
+		return err
+	}
+	if d := getFirstChild(doc, withTag("div"), withClass("app-details-left")); d != nil {
+		project.Description = getNodeTextContent(d)
+	}
+	return nil
 }
 
 //
 
-// trimResponseHeaders trims API key and noise from the recording.
 func trimResponseHeaders(i *cassette.Interaction) error {
 	i.Request.Headers.Del("Authorization")
 	i.Request.Headers.Del("X-Request-Id")
@@ -225,6 +226,10 @@ func withClass(className string) nodeSelector {
 
 func withID(id string) nodeSelector {
 	return withAttr("id", id)
+}
+
+func withType(t html.NodeType) nodeSelector {
+	return func(n *html.Node) bool { return n.Type == t }
 }
 
 // yieldChildren travel the tree with the filter specified, traversing depth first.
@@ -268,6 +273,15 @@ func getNodeAttr(n *html.Node, key string) string {
 	return ""
 }
 
+// getNodeTextContent returns the text as processed in HTML.
+func getNodeTextContent(n *html.Node) string {
+	buf := bytes.Buffer{}
+	for c := range yieldChildren(n, withType(html.TextNode)) {
+		buf.WriteString(c.Data)
+	}
+	return strings.TrimSpace(buf.String())
+}
+
 //
 
 func mainImpl() error {
@@ -283,7 +297,37 @@ func mainImpl() error {
 		return err
 	}
 
-	h := &roundtrippers.Throttle{Transport: http.DefaultTransport, QPS: 1}
+	ch := make(chan roundtrippers.Record)
+	eg, ctx := errgroup.WithContext(ctx)
+	eg.Go(func() error {
+		for i := 0; ; i++ {
+			select {
+			case r, ok := <-ch:
+				if !ok {
+					return nil
+				}
+				if r.Response != nil {
+					f, err := os.Create(fmt.Sprintf("testdata/get%03d.html", i))
+					if err != nil {
+						return err
+					}
+					_, err = io.Copy(f, r.Response.Body)
+					_ = f.Close()
+					if err != nil {
+						return err
+					}
+				}
+			case <-ctx.Done():
+				return nil
+			}
+		}
+	})
+	h := &roundtrippers.Capture{
+		Transport: &roundtrippers.Throttle{
+			Transport: http.DefaultTransport, QPS: 1,
+		},
+		C: ch,
+	}
 	rr, err := recorder.New("testdata/main",
 		recorder.WithMode(recorder.ModeRecordOnce),
 		recorder.WithSkipRequestLatency(true),
@@ -301,6 +345,11 @@ func mainImpl() error {
 	projects, err := d.fetchProjects(ctx)
 	if err != nil {
 		return err
+	}
+	for i := range projects {
+		if err = d.fetchProject(ctx, &projects[i]); err != nil {
+			return err
+		}
 	}
 	for _, p := range projects {
 		fmt.Printf("- %#v\n", p)
