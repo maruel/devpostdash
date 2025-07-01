@@ -183,7 +183,7 @@ func (d *devpostClient) fetchProject(ctx context.Context, project *project) erro
 	if err != nil {
 		return err
 	}
-	if d := dom.FirstChild(doc, dom.Tag("div"), dom.Class("app-details-left")); d != nil {
+	if d := dom.FirstChild(doc, dom.Tag("div"), dom.ID("app-details-left")); d != nil {
 		project.Description = dom.NodeTextContent(d)
 	}
 	return nil
