@@ -7,6 +7,7 @@ package dom
 
 import (
 	"bytes"
+	"fmt"
 	"iter"
 	"slices"
 	"strings"
@@ -96,4 +97,221 @@ func NodeText(n *html.Node) string {
 		buf.WriteString(c.Data)
 	}
 	return strings.Join(strings.Fields(buf.String()), " ")
+}
+
+// NodeMarkdown returns the node's content as a markdown representation.
+//
+// This is best effort.
+func NodeMarkdown(n *html.Node) string {
+	buf := bytes.Buffer{}
+	nodeMarkdownRecursive(&buf, n)
+	return buf.String()
+}
+
+//
+
+// getDirectTextContent returns the direct text content of a node, without recursing into child elements.
+func getDirectTextContent(n *html.Node) string {
+	var buf bytes.Buffer
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if c.Type == html.TextNode {
+			buf.WriteString(c.Data)
+		}
+	}
+	return buf.String()
+}
+
+// getMarkdownContent returns the node's content as a markdown representation.
+func getMarkdownContent(n *html.Node) string {
+	buf := bytes.Buffer{}
+	nodeMarkdownRecursive(&buf, n)
+	return buf.String()
+}
+
+func nodeMarkdownRecursive(buf *bytes.Buffer, n *html.Node) {
+	switch n.Type {
+	case html.TextNode:
+		buf.WriteString(n.Data)
+	case html.ElementNode:
+		switch n.Data {
+		case "a":
+			href := NodeAttr(n, "href")
+			buf.WriteString("[")
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				nodeMarkdownRecursive(buf, c)
+			}
+			buf.WriteString("](")
+			buf.WriteString(href)
+			buf.WriteString(")")
+		case "strong", "b":
+			buf.WriteString("**")
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				nodeMarkdownRecursive(buf, c)
+			}
+			buf.WriteString("**")
+		case "em", "i":
+			buf.WriteString("*")
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				nodeMarkdownRecursive(buf, c)
+			}
+			buf.WriteString("*")
+		case "img":
+			buf.WriteString("![")
+			// TODO: Handle when there's no alt. Use figcaption.
+			buf.WriteString(NodeAttr(n, "alt"))
+			buf.WriteString("](")
+			buf.WriteString(NodeAttr(n, "src"))
+			buf.WriteString(")")
+		case "p":
+			buf.WriteString("\n\n")
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				nodeMarkdownRecursive(buf, c)
+			}
+			buf.WriteString("\n\n")
+		case "br":
+			buf.WriteString("\n")
+		case "h1":
+			buf.WriteString("\n# ")
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				nodeMarkdownRecursive(buf, c)
+			}
+			buf.WriteString("\n\n")
+		case "h2":
+			buf.WriteString("\n## ")
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				nodeMarkdownRecursive(buf, c)
+			}
+			buf.WriteString("\n\n")
+		case "h3":
+			buf.WriteString("\n### ")
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				nodeMarkdownRecursive(buf, c)
+			}
+			buf.WriteString("\n\n")
+		case "h4":
+			buf.WriteString("\n#### ")
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				nodeMarkdownRecursive(buf, c)
+			}
+			buf.WriteString("\n\n")
+		case "h5":
+			buf.WriteString("\n##### ")
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				nodeMarkdownRecursive(buf, c)
+			}
+			buf.WriteString("\n\n")
+		case "h6":
+			buf.WriteString("\n###### ")
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				nodeMarkdownRecursive(buf, c)
+			}
+			buf.WriteString("\n\n")
+		case "ul":
+			buf.WriteString("\n")
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				if c.Type == html.ElementNode && c.Data == "li" {
+					buf.WriteString("- ")
+					for liChild := c.FirstChild; liChild != nil; liChild = liChild.NextSibling {
+						nodeMarkdownRecursive(buf, liChild)
+					}
+					buf.WriteString("\n")
+				}
+			}
+		case "ol":
+			buf.WriteString("\n")
+			itemNum := 1
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				if c.Type == html.ElementNode && c.Data == "li" {
+					buf.WriteString(fmt.Sprintf("%d. ", itemNum))
+					for liChild := c.FirstChild; liChild != nil; liChild = liChild.NextSibling {
+						nodeMarkdownRecursive(buf, liChild)
+					}
+					buf.WriteString("\n")
+					itemNum++
+				}
+			}
+		case "code":
+			buf.WriteString("`")
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				nodeMarkdownRecursive(buf, c)
+			}
+			buf.WriteString("`")
+		case "pre":
+			buf.WriteString("\n```\n")
+			buf.WriteString(getDirectTextContent(n))
+			buf.WriteString("\n```\n")
+		case "table":
+			buf.WriteString("\n")
+			// Collect all rows first, separating header from body rows
+			var headerCells []string
+			var bodyRows [][]string
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				if c.Type == html.ElementNode {
+					if c.Data == "thead" {
+						for th := c.FirstChild; th != nil; th = th.NextSibling {
+							if th.Type == html.ElementNode && th.Data == "tr" {
+								for cell := th.FirstChild; cell != nil; cell = cell.NextSibling {
+									if cell.Type == html.ElementNode && cell.Data == "th" {
+										headerCells = append(headerCells, getMarkdownContent(cell))
+									}
+								}
+							}
+						}
+					} else if c.Data == "tbody" || c.Data == "tr" { // Handle tbody or direct tr children
+						var rowsToProcess *html.Node
+						if c.Data == "tbody" {
+							rowsToProcess = c.FirstChild
+						} else { // c.Data == "tr"
+							rowsToProcess = c
+						}
+						for tr := rowsToProcess; tr != nil; tr = tr.NextSibling {
+							if tr.Type == html.ElementNode && tr.Data == "tr" {
+								var rowData []string
+								for cell := tr.FirstChild; cell != nil; cell = cell.NextSibling {
+									if cell.Type == html.ElementNode && (cell.Data == "td" || cell.Data == "th") {
+										rowData = append(rowData, getMarkdownContent(cell))
+									}
+								}
+								bodyRows = append(bodyRows, rowData)
+							}
+							if c.Data == "tr" { // If we processed a direct tr, break after it
+								break
+							}
+						}
+					}
+				}
+			}
+
+			// Print header if present
+			if len(headerCells) > 0 {
+				buf.WriteString("| ")
+				buf.WriteString(strings.Join(headerCells, " | "))
+				buf.WriteString(" |\n")
+				buf.WriteString("|")
+				for range len(headerCells) {
+					buf.WriteString(" --- |")
+				}
+				buf.WriteString("\n")
+			}
+			// Print body rows
+			for _, rowData := range bodyRows {
+				buf.WriteString("| ")
+				buf.WriteString(strings.Join(rowData, " | "))
+				buf.WriteString(" |\n")
+			}
+			buf.WriteString("\n")
+		default:
+			// For other elements, just recurse into children
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				nodeMarkdownRecursive(buf, c)
+			}
+		}
+	case html.DocumentNode, html.DoctypeNode, html.CommentNode:
+		// Do nothing for these types, just recurse into children
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			nodeMarkdownRecursive(buf, c)
+		}
+	default:
+		panic("TODO")
+	}
 }

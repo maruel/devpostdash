@@ -244,6 +244,88 @@ func TestNodeText(t *testing.T) {
 	}
 }
 
+func TestNodeMarkdown(t *testing.T) {
+	tests := []struct {
+		name string
+		html string
+		want string
+	}{
+		{
+			name: "Link",
+			html: `<a href="https://example.com">Example Link</a>`,
+			want: "[Example Link](https://example.com)",
+		},
+		{
+			name: "Image",
+			html: `<img src="image.jpg" alt="Description of image">`,
+			want: "![Description of image](image.jpg)",
+		},
+		{
+			name: "Bold",
+			html: `<b>Bold Text</b><strong>Strong Text</strong>`,
+			want: "**Bold Text****Strong Text**",
+		},
+		{
+			name: "Italic",
+			html: `<i>Italic Text</i><em>Emphasized Text</em>`,
+			want: "*Italic Text**Emphasized Text*",
+		},
+		{
+			name: "Code",
+			html: `This is some <code>inline code</code>.`,
+			want: "This is some `inline code`.",
+		},
+		{
+			name: "Preformatted Text (Code Block)",
+			html: "<pre>func main() {\n    fmt.Println(\"Hello, World!\")\n}</pre>",
+			want: "\n```\nfunc main() {\n    fmt.Println(\"Hello, World!\")\n}\n```\n",
+		},
+		{
+			name: "Table",
+			html: `<table><thead><tr><th>Header 1</th><th>Header 2</th></tr></thead><tbody><tr><td>Row 1 Col 1</td><td>Row 1 Col 2</td></tr><tr><td>Row 2 Col 1</td><td>Row 2 Col 2</td></tr></tbody></table>`,
+			want: "\n| Header 1 | Header 2 |\n| --- | --- |\n| Row 1 Col 1 | Row 1 Col 2 |\n| Row 2 Col 1 | Row 2 Col 2 |\n\n",
+		},
+		{
+			name: "Paragraph and Line Break",
+			html: `<p>Line 1<br>Line 2</p>`,
+			want: "\n\nLine 1\nLine 2\n\n",
+		},
+		{
+			name: "Mixed Content",
+			html: `<h1>Title</h1><p>This is a <b>test</b> with an <a href="#">inline link</a> and <i>some italic text</i>.</p>`,
+			want: "\n# Title\n\n\n\nThis is a **test** with an [inline link](#) and *some italic text*.\n\n",
+		},
+		{
+			name: "Unordered List",
+			html: `<ul><li>Item 1</li><li>Item 2</li></ul>`,
+			want: "\n- Item 1\n- Item 2\n",
+		},
+		{
+			name: "Ordered List",
+			html: `<ol><li>First item</li><li>Second item</li></ol>`,
+			want: "\n1. First item\n2. Second item\n",
+		},
+		{
+			name: "Table with strong, em, without tbody",
+			html: `<table><thead><tr><th>**Header 1**</th><th>*Header 2*</th></tr></thead><tr><td>Row 1 Col 1</td><td>Row 1 Col 2</td></tr></table>`,
+			want: "\n| **Header 1** | *Header 2* |\n| --- | --- |\n| Row 1 Col 1 | Row 1 Col 2 |\n\n",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			doc := parseHTML(t, tt.html)
+			// We need to get the body or a relevant root node for markdown conversion
+			bodyNode := FirstChild(doc, Tag("body"))
+			if bodyNode == nil {
+				bodyNode = doc // Fallback to document if no body (e.g., fragment HTML)
+			}
+			if got := NodeMarkdown(bodyNode); got != tt.want {
+				t.Errorf("NodeMarkdown() for %s\nGot:\n%q\nWant:\n%q", tt.name, got, tt.want)
+			}
+		})
+	}
+}
+
 //
 
 func parseHTML(t *testing.T, s string) *html.Node {
