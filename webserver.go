@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"embed"
 	"errors"
 	"fmt"
 	"html/template"
@@ -15,10 +16,15 @@ import (
 	"time"
 )
 
+//go:embed templates/*.html
+var templatesFS embed.FS
+
+var templates = template.Must(template.ParseFS(templatesFS, "templates/*.html"))
+
 func runWebserver(ctx context.Context, host, title string, projects []Project) error {
-	tmpl, err := template.ParseFiles("templates/cards.html")
-	if err != nil {
-		return fmt.Errorf("failed to parse template: %w", err)
+	tmpl := templates.Lookup("cards.html")
+	if tmpl == nil {
+		return fmt.Errorf("failed to parse template cards.html")
 	}
 
 	mux := http.ServeMux{}
