@@ -21,13 +21,11 @@ import (
 // Config is the content of config.yml.
 type Config struct {
 	Name   string
-	ID     string
 	Cookie string
 }
 
 type devpostClient struct {
 	name   string
-	id     string
 	c      http.Client
 	header http.Header
 }
@@ -39,7 +37,6 @@ func newDevpostClient(c *Config, h http.RoundTripper) (devpostClient, error) {
 	}
 	out := devpostClient{
 		name: c.Name,
-		id:   c.ID,
 		header: http.Header{
 			"Cookie":     []string{c.Cookie},
 			"Referer":    []string{"https://vibe-coding-hackathon.devpost.com/rules"},
@@ -78,22 +75,6 @@ func (d *devpostClient) get(ctx context.Context, url string) ([]byte, error) {
 	}
 	return bod, err
 }
-
-/*
-func (d *devpost) login(ctx context.Context) ([]byte, error) {
-	url := "https://devpost.com/users/login"
-	bod, err := d.get(ctx, url)
-	return bod, err
-}
-*/
-
-/*
-func (d *devpost) fetchProjectsInternal(ctx context.Context) ([]byte, error) {
-	url := "https://manage.devpost.com/challenges/" + d.id + "/dashboard/submissions"
-	bod, err := d.get(ctx, url)
-	return bod, err
-}
-*/
 
 type Person struct {
 	Name      string

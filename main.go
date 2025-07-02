@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/goccy/go-yaml"
 	"github.com/lmittmann/tint"
 	"github.com/maruel/roundtrippers"
 	"github.com/mattn/go-colorable"
@@ -176,21 +175,17 @@ func mainImpl() error {
 	record := flag.Bool("record", false, "record mode")
 	host := flag.String("host", ":8080", "host")
 	dump := flag.Bool("dump", false, "dump mode")
+	site := flag.String("site", "", "site")
 	flag.Parse()
 
 	if flag.NArg() != 0 {
 		return errors.New("unknown arguments")
 	}
+	if *site == "" {
+		return errors.New("required flag: -site")
+	}
 	if *verbose {
 		Level.Set(slog.LevelDebug)
-	}
-	config, err := os.ReadFile("config.yml")
-	if err != nil {
-		return err
-	}
-	var c Config
-	if err := yaml.Unmarshal(config, &c); err != nil {
-		return err
 	}
 
 	h := http.DefaultTransport
@@ -202,7 +197,7 @@ func mainImpl() error {
 		defer rr.Stop()
 		h = rr
 	}
-	d, err := newDevpostClient(&c, &roundtrippers.Throttle{Transport: h, QPS: 1})
+	d, err := newDevpostClient(&Config{Name: *site, Cookie: "platform.notifications.newsletter.dismissed=dismissed"}, &roundtrippers.Throttle{Transport: h, QPS: 1})
 	if err != nil {
 		return err
 	}
@@ -218,7 +213,7 @@ func mainImpl() error {
 		printProjects(projects)
 		return nil
 	}
-	return runWebserver(ctx, *host, c.Name, projects)
+	return runWebserver(ctx, *host, *site, projects)
 }
 
 func main() {
