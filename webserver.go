@@ -9,7 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"time"
@@ -24,7 +24,7 @@ func runWebserver(ctx context.Context, host string, projects []Project) error {
 	mux := http.ServeMux{}
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if err := tmpl.Execute(w, projects); err != nil {
-			log.Printf("Error executing template: %v", err)
+			slog.ErrorContext(ctx, "web", "err", err)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		}
 	})
@@ -33,7 +33,7 @@ func runWebserver(ctx context.Context, host string, projects []Project) error {
 	if err != nil {
 		return err
 	}
-	log.Printf("Listening on %s", ln.Addr())
+	slog.InfoContext(ctx, "web", "listening", ln.Addr())
 	s := &http.Server{Handler: &mux}
 	errCh := make(chan error)
 	go func() {
@@ -46,7 +46,7 @@ func runWebserver(ctx context.Context, host string, projects []Project) error {
 
 	select {
 	case <-ctx.Done():
-		log.Printf("Shutting down ...")
+		slog.InfoContext(ctx, "web", "msg", "Shutting down...")
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		err := s.Shutdown(shutdownCtx)
 		shutdownCancel()

@@ -11,14 +11,19 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"syscall"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/goccy/go-yaml"
+	"github.com/lmittmann/tint"
 	"github.com/maruel/roundtrippers"
+	"github.com/mattn/go-colorable"
+	"github.com/mattn/go-isatty"
 	"golang.org/x/sync/errgroup"
 	"gopkg.in/dnaeon/go-vcr.v4/pkg/cassette"
 	"gopkg.in/dnaeon/go-vcr.v4/pkg/recorder"
@@ -87,9 +92,85 @@ func trimResponseHeaders(i *cassette.Interaction) error {
 	return nil
 }
 
+func watchExecutable(ctx context.Context, cancel context.CancelFunc) error {
+	exePath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("failed to get executable path: %w", err)
+	}
+	w, err := fsnotify.NewWatcher()
+	if err != nil {
+		return fmt.Errorf("failed to create file watcher: %w", err)
+	}
+	go func() {
+		defer w.Close()
+		for {
+			select {
+			case event, ok := <-w.Events:
+				if !ok {
+					return
+				}
+				// Detect writes or chmod events which may indicate a modification
+				if event.Has(fsnotify.Write) || event.Has(fsnotify.Chmod) {
+					slog.InfoContext(ctx, "citygpt", "msg", "Executable file was modified, initiating shutdown...")
+					cancel()
+					return
+				}
+			case err, ok := <-w.Errors:
+				if !ok {
+					return
+				}
+				slog.WarnContext(ctx, "citygpt", "msg", "Error watching executable", "err", err)
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	if err := w.Add(exePath); err != nil {
+		return fmt.Errorf("failed to watch executable: %w", err)
+	}
+	return nil
+}
+
 func mainImpl() error {
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	defer cancel()
+	Level := &slog.LevelVar{}
+	Level.Set(slog.LevelInfo)
+	logger := slog.New(tint.NewHandler(colorable.NewColorable(os.Stderr), &tint.Options{
+		Level:      Level,
+		TimeFormat: "15:04:05.000", // Like time.TimeOnly plus milliseconds.
+		NoColor:    !isatty.IsTerminal(os.Stderr.Fd()),
+		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+			val := a.Value.Any()
+			skip := false
+			switch t := val.(type) {
+			case string:
+				skip = t == ""
+			case bool:
+				skip = !t
+			case uint64:
+				skip = t == 0
+			case int64:
+				skip = t == 0
+			case float64:
+				skip = t == 0
+			case time.Time:
+				skip = t.IsZero()
+			case time.Duration:
+				skip = t == 0
+			case nil:
+				skip = true
+			}
+			if skip {
+				return slog.Attr{}
+			}
+			return a
+		},
+	}))
+	slog.SetDefault(logger)
+	if err := watchExecutable(ctx, cancel); err != nil {
+		return err
+	}
 
 	verbose := flag.Bool("verbose", false, "verbose mode")
 	record := flag.Bool("record", false, "record mode")
@@ -101,7 +182,7 @@ func mainImpl() error {
 		return errors.New("unknown flags")
 	}
 	if *verbose {
-		// log.SetLevel(log.DebugLevel)
+		Level.Set(slog.LevelDebug)
 	}
 	config, err := os.ReadFile("config.yml")
 	if err != nil {
@@ -137,7 +218,6 @@ func mainImpl() error {
 		printProjects(projects)
 		return nil
 	}
-	log.Printf("Found %d projects", len(projects))
 	return runWebserver(ctx, *host, projects)
 }
 

@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/cookiejar"
 
@@ -130,6 +131,7 @@ func (d *devpostClient) fetchProjects(ctx context.Context) ([]Project, error) {
 		}
 		projects = append(projects, p...)
 	}
+	slog.InfoContext(ctx, "devpost", "projects", len(projects))
 	return projects, nil
 }
 
