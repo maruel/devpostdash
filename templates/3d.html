@@ -327,8 +327,7 @@ that can be found in the LICENSE file.
 			}
 		`;
 
-		let camera, scene, renderer, mesh;
-		let uniforms;
+		let camera, scene, renderer;
 		let previousTime = 0;
 
 		function background() {
@@ -367,7 +366,7 @@ that can be found in the LICENSE file.
 
 			// Object
 			const geometry = new THREE.SphereGeometry(200, 128, 64);
-			uniforms = {
+			let uniforms = {
 				time: {value: 1.0},
 			};
 			const material = new THREE.ShaderMaterial({
@@ -375,7 +374,7 @@ that can be found in the LICENSE file.
 				vertexShader: vertexShader,
 				fragmentShader: fragmentShader,
 			});
-			mesh = new THREE.Mesh(geometry, material);
+			let mesh = new THREE.Mesh(geometry, material);
 			scene.add(mesh);
 
 			window.addEventListener('resize', onWindowResize);
@@ -388,12 +387,11 @@ that can be found in the LICENSE file.
 		}
 
 		function animate(currentTime) {
-			requestAnimationFrame(animate);
+			window.requestAnimationFrame(animate);
 			const deltaTime = (currentTime - previousTime) * 0.001; // Convert to seconds
 			previousTime = currentTime;
-			uniforms.time.value += deltaTime * 0.05; // Adjust uniform update for deltaTime
-			camera.rotation.y += deltaTime * 0.05; // Adjust rotation speed for deltaTime
-			mesh.rotation.y += deltaTime * 0.1; // Adjust rotation speed for deltaTime
+			const rotationHz = 1.0 / 120.0;
+			camera.rotation.y += 2. * Math.PI * rotationHz * deltaTime;
 			renderer.render(scene, camera);
 		}
 
