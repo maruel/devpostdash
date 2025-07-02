@@ -12,17 +12,12 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/cookiejar"
+	"net/url"
 	"strconv"
 
 	"github.com/maruel/devpostdash/dom"
 	"golang.org/x/net/html"
 )
-
-// Config is the content of config.yml.
-type Config struct {
-	Name   string
-	Cookie string
-}
 
 type devpostClient struct {
 	name   string
@@ -30,15 +25,17 @@ type devpostClient struct {
 	header http.Header
 }
 
-func newDevpostClient(c *Config, h http.RoundTripper) (devpostClient, error) {
+func newDevpostClient(site string, h http.RoundTripper) (devpostClient, error) {
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		return devpostClient{}, err
 	}
+	jar.SetCookies(&url.URL{Scheme: "https", Host: site}, []*http.Cookie{
+		{Name: "platform.notifications.newsletter.dismissed", Value: "dismissed"},
+	})
 	out := devpostClient{
-		name: c.Name,
+		name: site,
 		header: http.Header{
-			"Cookie":     []string{c.Cookie},
 			"Referer":    []string{"https://vibe-coding-hackathon.devpost.com/rules"},
 			"User-Agent": []string{"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"},
 		},

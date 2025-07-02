@@ -197,7 +197,7 @@ func mainImpl() error {
 		defer rr.Stop()
 		h = rr
 	}
-	d, err := newDevpostClient(&Config{Name: *site, Cookie: "platform.notifications.newsletter.dismissed=dismissed"}, &roundtrippers.Throttle{Transport: h, QPS: 1})
+	d, err := newDevpostClient(*site, &roundtrippers.Throttle{Transport: h, QPS: 1})
 	if err != nil {
 		return err
 	}
