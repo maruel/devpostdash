@@ -86,7 +86,8 @@ jobs:
         # You may want to run only on linux to save on cost. Projects with
         # OS-specific code benefits from explicitly linting on macOS and
         # Windows.
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        #os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest]
     env:
       PYTHONDONTWRITEBYTECODE: x
     steps:

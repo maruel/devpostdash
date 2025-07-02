@@ -4,7 +4,6 @@ go 1.24.4
 
 require (
 	github.com/fsnotify/fsnotify v1.9.0
-	github.com/goccy/go-yaml v1.18.0
 	github.com/lmittmann/tint v1.1.2
 	github.com/maruel/roundtrippers v0.4.0
 	github.com/mattn/go-colorable v0.1.14

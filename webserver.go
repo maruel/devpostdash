@@ -45,7 +45,7 @@ func runWebserver(ctx context.Context, host, title string, projects []Project) e
 		return err
 	}
 	slog.InfoContext(ctx, "web", "listening", ln.Addr())
-	s := &http.Server{Handler: &mux}
+	s := &http.Server{Handler: &mux, ReadHeaderTimeout: 2 * time.Second}
 	errCh := make(chan error)
 	go func() {
 		err2 := s.Serve(ln)
