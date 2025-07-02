@@ -329,6 +329,7 @@ that can be found in the LICENSE file.
 
 		let camera, scene, renderer, mesh;
 		let uniforms;
+		let previousTime = 0;
 
 		function background() {
 			// 3D background
@@ -386,16 +387,19 @@ that can be found in the LICENSE file.
 			renderer.setSize(window.innerWidth, window.innerHeight);
 		}
 
-		function animate() {
+		function animate(currentTime) {
 			requestAnimationFrame(animate);
-			uniforms.time.value += 0.05;
-			camera.rotation.y += 0.0005; // Slow rotation for floating effect
-			mesh.rotation.y += 0.005;
+			const deltaTime = (currentTime - previousTime) * 0.001; // Convert to seconds
+			previousTime = currentTime;
+			uniforms.time.value += deltaTime * 0.05; // Adjust uniform update for deltaTime
+			camera.rotation.y += deltaTime * 0.05; // Adjust rotation speed for deltaTime
+			mesh.rotation.y += deltaTime * 0.1; // Adjust rotation speed for deltaTime
 			renderer.render(scene, camera);
 		}
 
 		background();
-		animate();
+		previousTime = document.timeline.currentTime;
+		animate(previousTime);
 	</script>
 
 	<script>
