@@ -471,28 +471,50 @@ that can be found in the LICENSE file.
 				return new THREE.CanvasTexture(canvas);
 			}
 			const starsGeometry = new THREE.BufferGeometry();
-			const starsMaterial = new THREE.PointsMaterial({
-				size: 1,
-				sizeAttenuation: true,
-				vertexColors: true, // Enable vertex colors
-				map: generateCircleTexture(), // Apply the circular texture
-				transparent: true, // Enable transparency
-				alphaTest: 0.1 // Discard pixels with alpha less than 0.1
-			});
 			const starVertices = [];
 			const starColors = []; // Array to store colors
-			for (let i = 0; i < 10000; i++) {
-				const x = (Math.random() - 0.5) * 1000;
-				const y = (Math.random() - 0.5) * 1000;
-				const z = (Math.random() - 0.5) * 1000;
-				starVertices.push(x, y, z);
-				// Assign random color with varying hue
+			const starSizes = []; // Array to store sizes
+			const numStars = 10000;
+			const starRadius = 500; // Fixed distance from origin
+			for (let i = 0; i < numStars; i++) {
+				// Generate points on a sphere centered at the camera.
+				const theta = Math.random() * Math.PI * 2; // Azimuthal angle
+				const phi = Math.acos((Math.random() * 2) - 1); // Polar angle (distribute evenly on sphere)
+				const x = starRadius * Math.sin(phi) * Math.cos(theta);
+				const y = starRadius * Math.sin(phi) * Math.sin(theta);
+				const z = starRadius * Math.cos(phi);
+				starVertices.push(x, y, z + camera.position.z);
 				const color = new THREE.Color();
-				color.setHSL(Math.random(), 0.7, 0.7); // Hue, Saturation, Lightness
+				color.setHSL(Math.random(), 0.7, 0.7);
 				starColors.push(color.r, color.g, color.b);
+				starSizes.push(Math.random() * 5 + 1); // Vary size between 1 and 6
 			}
 			starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
 			starsGeometry.setAttribute('color', new THREE.Float32BufferAttribute(starColors, 3));
+			starsGeometry.setAttribute('size', new THREE.Float32BufferAttribute(starSizes, 1));
+			const starsMaterial = new THREE.ShaderMaterial({
+				uniforms: {pointTexture: {value: generateCircleTexture()}},
+				vertexShader: `
+					attribute float size;
+					attribute vec3 color;
+					varying vec3 vColor;
+					void main() {
+						vColor = color;
+						vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+						gl_PointSize = size * (300.0 / -mvPosition.z); // Scale size by distance
+						gl_Position = projectionMatrix * mvPosition;
+					}
+				`,
+				fragmentShader: `
+					uniform sampler2D pointTexture;
+					varying vec3 vColor;
+					void main() {
+						gl_FragColor = vec4(vColor, 1.0) * texture2D(pointTexture, gl_PointCoord);
+					}
+				`,
+				transparent: true,
+				blending: THREE.AdditiveBlending // For glowing effect
+			});
 			scene.add(new THREE.Points(starsGeometry, starsMaterial));
 
 			// Sphere
