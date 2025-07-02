@@ -189,8 +189,6 @@ that can be found in the LICENSE file.
 </head>
 
 <body>
-	<h1>{{.Title}}</h1>
-
 	<div class="card-carousel">
 		{{range .Projects}}
 		<div class="project-card">
@@ -213,9 +211,17 @@ that can be found in the LICENSE file.
 		{{end}}
 	</div>
 
-	<p class="github-link">
-		<a href="https://github.com/maruel/devpostdash">github.com/maruel/devpostdash</a>
-	</p>
+	<script type="importmap">
+	{
+		"imports": {
+				"three": "https://threejs.org/build/three.module.min.js",
+				"three/addons/": "https://threejs.org/examples/jsm/"
+			}
+		}
+	</script>
+	<script type="module">
+		import * as THREE from 'three';
+	</script>
 
 	<script>
 		document.addEventListener('DOMContentLoaded', () => {

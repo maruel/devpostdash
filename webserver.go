@@ -67,7 +67,9 @@ func handleError(ctx context.Context, w http.ResponseWriter, err error) {
 func (s *webserver) handleSite(w http.ResponseWriter, r *http.Request) {
 	project := r.PathValue("project")
 	t := r.PathValue("type")
-	if t != "card" && t != "cards" && t != "table" {
+	switch t {
+	case "3d", "card", "cards", "table":
+	default:
 		http.Redirect(w, r, "/site/"+project+"/card", http.StatusSeeOther)
 		return
 	}
