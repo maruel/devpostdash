@@ -36,6 +36,14 @@ func (s *webserver) handleRoot(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *webserver) handleAbout(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := templates.Lookup("about.html").Execute(w, nil); err != nil {
+		slog.ErrorContext(r.Context(), "web", "err", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+}
+
 func (s *webserver) handleSiteRedirect(w http.ResponseWriter, r *http.Request) {
 	project := r.PathValue("project")
 	if project == "" {
@@ -93,6 +101,7 @@ func runWebserver(ctx context.Context, host string, d *devpostClient) error {
 	}
 	mux := http.ServeMux{}
 	mux.HandleFunc("GET /{$}", w.handleRoot)
+	mux.HandleFunc("GET /about", w.handleAbout)
 	mux.HandleFunc("GET /site/{project}", w.handleSiteRedirect)
 	mux.HandleFunc("GET /site/{project}/{type}", w.handleSite)
 
