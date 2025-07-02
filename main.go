@@ -14,7 +14,6 @@ import (
 	"net/http/cookiejar"
 	"os"
 	"os/signal"
-	"strings"
 	"time"
 
 	"github.com/goccy/go-yaml"
@@ -94,15 +93,22 @@ func (d *devpost) fetchProjectsInternal(ctx context.Context) ([]byte, error) {
 }
 */
 
+type Person struct {
+	Name      string
+	URL       string
+	AvatarURL string
+}
+
 type project struct {
-	ID          string
-	Title       string
-	URL         string
-	Tagline     string
-	Image       string
-	Winner      bool
-	Team        string
-	Description string
+	ID            string
+	Title         string
+	URL           string
+	Tagline       string
+	Image         string
+	Winner        bool
+	Team          []Person
+	Description   string
+	DescriptionMD string
 }
 
 func (d *devpostClient) fetchProjects(ctx context.Context) ([]project, error) {
@@ -162,13 +168,11 @@ func parseProjectNode(n *html.Node) project {
 	if winnerNode := dom.FirstChild(n, dom.Tag("aside"), dom.Class("entry-badge")); winnerNode != nil {
 		p.Winner = true
 	}
-	var teamNames []string
 	for c := range dom.YieldChildren(n, dom.Tag("span"), dom.Class("user-profile-link")) {
 		if imgNode := dom.FirstChild(c, dom.Tag("img")); imgNode != nil {
-			teamNames = append(teamNames, dom.NodeAttr(imgNode, "alt"))
+			p.Team = append(p.Team, Person{Name: dom.NodeAttr(imgNode, "alt"), AvatarURL: dom.NodeAttr(imgNode, "src"), URL: dom.NodeAttr(c, "data-url")})
 		}
 	}
-	p.Team = strings.Join(teamNames, ", ")
 	// Description is not directly available on the project card.
 	return p
 }
@@ -184,7 +188,8 @@ func (d *devpostClient) fetchProject(ctx context.Context, project *project) erro
 		return err
 	}
 	if d := dom.FirstChild(doc, dom.Tag("div"), dom.ID("app-details-left")); d != nil {
-		project.Description = dom.NodeMarkdown(d)
+		project.Description = dom.NodeText(d)
+		project.DescriptionMD = dom.NodeMarkdown(d)
 	}
 	return nil
 }
@@ -271,7 +276,13 @@ func mainImpl() error {
 		}
 	}
 	for _, p := range projects {
-		fmt.Printf("- %#v\n", p)
+		// ID, URL, Image, Description, Team
+		suffix := ""
+		if p.Winner {
+			suffix = " (winner)"
+		}
+		fmt.Printf("- %s %s%s\n", p.Title, p.Tagline, suffix)
+		fmt.Printf("  %s\n", p.Team)
 	}
 	return err
 }
