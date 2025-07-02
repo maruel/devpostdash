@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+{{/*
+Copyright 2025 Marc-Antoine Ruel. All rights reserved.
+Use of this source code is governed under the Apache License, Version 2.0
+that can be found in the LICENSE file.
+*/}}
+<html>
+
+<head>
+	<title>{{.Title}}</title>
+	<style>
+		body {
+			font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+			margin: 0;
+			padding: 0;
+			background-color: #eef2f7;
+			color: #333;
+			line-height: 1.6;
+			overflow: hidden;
+			/* Hide body scrollbars */
+		}
+
+		h1 {
+			color: #2c3e50;
+			text-align: center;
+			margin-bottom: 20px;
+			font-size: 2.5em;
+			font-weight: 600;
+		}
+
+		.card-carousel {
+			position: relative;
+			width: 100vw;
+			height: 80vh;
+			perspective: 1000px;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+		}
+
+		.project-card {
+			position: absolute;
+			width: 400px;
+			height: 500px;
+			background-color: #ffffff;
+			border-radius: 12px;
+			box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+			padding: 25px;
+			box-sizing: border-box;
+			display: flex;
+			flex-direction: column;
+			justify-content: space-between;
+			transition: transform 0.8s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.8s;
+			transform-style: preserve-3d;
+			opacity: 0;
+			transform: translateZ(-200px) rotateY(0deg);
+		}
+
+		.project-card.active {
+			opacity: 1;
+			transform: translateZ(0) rotateY(0deg);
+			z-index: 10;
+		}
+
+		.project-card.next {
+			opacity: 0.5;
+			transform: translateX(50%) translateZ(-100px) rotateY(-45deg);
+			z-index: 5;
+		}
+
+		.project-card.prev {
+			opacity: 0.5;
+			transform: translateX(-50%) translateZ(-100px) rotateY(45deg);
+			z-index: 5;
+		}
+
+		.project-card h2 {
+			margin-top: 0;
+			margin-bottom: 10px;
+			font-size: 1.6em;
+			color: #34495e;
+		}
+
+		.project-card h2 a {
+			text-decoration: none;
+			color: #007bff;
+			transition: color 0.2s ease;
+		}
+
+		.project-card h2 a:hover {
+			color: #0056b3;
+		}
+
+		.project-card .tagline {
+			font-style: italic;
+			color: #7f8c8d;
+			margin-bottom: 15px;
+			font-size: 0.95em;
+		}
+
+		.project-card .team-avatars {
+			display: flex;
+			align-items: center;
+			margin-top: 15px;
+			margin-bottom: 15px;
+		}
+
+		.project-card .team-avatars img {
+			border-radius: 50%;
+			width: 45px;
+			height: 45px;
+			margin-right: 8px;
+			border: 3px solid #ecf0f1;
+			box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+		}
+
+		.project-card .likes {
+			font-weight: bold;
+			color: #e74c3c;
+			font-size: 1.1em;
+			display: flex;
+			align-items: center;
+			justify-content: flex-end;
+			margin-top: auto;
+		}
+
+		.project-card .likes::before {
+			content: '❤️';
+			margin-right: 5px;
+		}
+
+		.github-link {
+			text-align: center;
+			margin-top: 20px;
+			font-size: 1.1em;
+		}
+
+		.github-link a {
+			color: #007bff;
+			text-decoration: none;
+			font-weight: 500;
+			transition: color 0.2s ease;
+		}
+
+		.github-link a:hover {
+			color: #0056b3;
+			text-decoration: underline;
+		}
+	</style>
+</head>
+
+<body>
+	<h1>{{.Title}}</h1>
+
+	<div class="card-carousel">
+		{{range .Projects}}
+		<div class="project-card">
+			<h2>
+				<a href="{{.URL}}">{{.Title}}</a>{{if .Winner}} 🏆{{end}}
+			</h2>
+			<p class="tagline">{{.Tagline}}</p>
+			<div class="team-avatars">
+				{{range .Team}}
+				<img src="{{.AvatarURL}}" alt="{{.Name}}" title="{{.Name}}" />
+				{{end}}
+			</div>
+			<div class="likes">{{.Likes}}</div>
+		</div>
+		{{end}}
+	</div>
+
+	<p class="github-link">
+		<a href="https://github.com/maruel/devpostdash">github.com/maruel/devpostdash</a>
+	</p>
+
+	<script>
+		document.addEventListener('DOMContentLoaded', () => {
+			const cards = document.querySelectorAll('.project-card');
+			let currentIndex = 0;
+
+			function updateCards() {
+				cards.forEach((card, index) => {
+					card.classList.remove('active', 'prev', 'next');
+					if (index === currentIndex) {
+						card.classList.add('active');
+					} else if (index === (currentIndex + 1) % cards.length) {
+						card.classList.add('next');
+					} else if (index === (currentIndex - 1 + cards.length) % cards.length) {
+						card.classList.add('prev');
+					}
+				});
+			}
+
+			function showNext() {
+				currentIndex = (currentIndex + 1) % cards.length;
+				updateCards();
+			}
+
+			function showPrev() {
+				currentIndex = (currentIndex - 1 + cards.length) % cards.length;
+				updateCards();
+			}
+
+			// Initial setup
+			if (cards.length > 0) {
+				updateCards();
+			}
+
+			// Scroll handling
+			let scrollTimeout;
+			window.addEventListener('wheel', (event) => {
+				if (window.innerWidth - event.clientX < 200) { // Detect scroll on the right side
+					event.preventDefault();
+					clearTimeout(scrollTimeout);
+					scrollTimeout = setTimeout(() => {
+						if (event.deltaY > 0) {
+							showNext();
+						} else {
+							showPrev();
+						}
+					}, 50); // Debounce scroll events
+				}
+			}, {passive: false});
+		});
+	</script>
+</body>
+
+</html>

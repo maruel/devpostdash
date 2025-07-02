@@ -56,7 +56,7 @@ func (s *webserver) handleSiteRedirect(w http.ResponseWriter, r *http.Request) {
 func (s *webserver) handleSite(w http.ResponseWriter, r *http.Request) {
 	project := r.PathValue("project")
 	t := r.PathValue("type")
-	if t != "cards" && t != "table" {
+	if t != "card" && t != "cards" && t != "table" {
 		http.Redirect(w, r, "/site/"+project+"/cards", http.StatusSeeOther)
 		return
 	}
