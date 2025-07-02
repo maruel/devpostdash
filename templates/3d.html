@@ -325,7 +325,7 @@ that can be found in the LICENSE file.
 			}
 		`;
 
-		let camera, scene, renderer;
+		let camera, scene, renderer, uniforms;
 		let previousTime = 0;
 
 		function background() {
@@ -358,8 +358,9 @@ that can be found in the LICENSE file.
 
 			// Sphere
 			const sphereGometry = new THREE.SphereGeometry(200, 128, 64);
+			uniforms = {time: {value: 1.0}};
 			const sphereMaterial = new THREE.ShaderMaterial({
-				uniforms: {time: {value: 1.0}},
+				uniforms: uniforms,
 				vertexShader: sphereVertexShader,
 				fragmentShader: sphereFragmentShader,
 			});
@@ -378,6 +379,7 @@ that can be found in the LICENSE file.
 			previousTime = currentTime;
 			const rotationHz = 1.0 / 120.0;
 			camera.rotation.y += 2. * Math.PI * rotationHz * deltaTime;
+			uniforms.time.value += deltaTime * 0.2;
 			renderer.render(scene, camera);
 		}
 
