@@ -67,18 +67,20 @@
 				<th>Title</th>
 				<th>Tagline</th>
 				<th>Team</th>
+				<th>❤️</th>
 			</tr>
 		</thead>
 		<tbody>
 			{{range .Projects}}
 			<tr>
-				<td>{{.Title}}{{if .Winner}} 🏆{{end}}</td>
+				<td><a href="{{.URL}}">{{.Title}}</a>{{if .Winner}} 🏆{{end}}</td>
 				<td>{{.Tagline}}</td>
 				<td>
 					{{range .Team}}
 					<img src="{{.AvatarURL}}" width="50" height="50" />
 					{{end}}
 				</td>
+				<td>{{.Likes}}</td>
 			</tr>
 			{{end}}
 		</tbody>

@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/cookiejar"
+	"strconv"
 
 	"github.com/maruel/devpostdash/dom"
 	"golang.org/x/net/html"
@@ -110,6 +111,7 @@ type Project struct {
 	Team          []Person
 	Description   string
 	DescriptionMD string
+	Likes         int
 }
 
 func (d *devpostClient) fetchProjects(ctx context.Context) ([]Project, error) {
@@ -174,6 +176,13 @@ func parseProjectNode(n *html.Node) Project {
 		if imgNode := dom.FirstChild(c, dom.Tag("img")); imgNode != nil {
 			p.Team = append(p.Team, Person{Name: dom.NodeAttr(imgNode, "alt"), AvatarURL: dom.NodeAttr(imgNode, "src"), URL: dom.NodeAttr(c, "data-url")})
 		}
+	}
+	if likeNode := dom.FirstChild(n, dom.Tag("span"), dom.Class("count"), dom.Class("like-count")); likeNode != nil {
+		t, err := strconv.Atoi(dom.NodeText(likeNode))
+		if err != nil {
+			slog.Error("failed to parse like count", "project", p.ID, "err", err)
+		}
+		p.Likes = t
 	}
 	// Description is not directly available on the nroject card.
 	return p
