@@ -29,7 +29,7 @@ type Config struct {
 	Cookie string
 }
 
-func scrapeDevpost(ctx context.Context, c Config) ([]project, error) {
+func scrapeDevpost(ctx context.Context, c Config) ([]Project, error) {
 	ch := make(chan roundtrippers.Record)
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.Go(func() error {
@@ -85,7 +85,7 @@ func scrapeDevpost(ctx context.Context, c Config) ([]project, error) {
 			return nil, err
 		}
 	}
-	return nil, nil
+	return projects, nil
 }
 
 func trimResponseHeaders(i *cassette.Interaction) error {
@@ -165,7 +165,7 @@ type Person struct {
 	AvatarURL string
 }
 
-type project struct {
+type Project struct {
 	ID            string
 	Title         string
 	URL           string
@@ -177,8 +177,8 @@ type project struct {
 	DescriptionMD string
 }
 
-func (d *devpostClient) fetchProjects(ctx context.Context) ([]project, error) {
-	var projects []project
+func (d *devpostClient) fetchProjects(ctx context.Context) ([]Project, error) {
+	var projects []Project
 	for i := 1; ; i++ {
 		// url := "https://" + d.name + ".devpost.com/project-gallery"
 		url := fmt.Sprintf("https://%s.devpost.com/submissions/search?page=%d&sort=alpha&terms=&utf8=%%E2%%9C%%93", d.name, i)
@@ -199,7 +199,7 @@ func (d *devpostClient) fetchProjects(ctx context.Context) ([]project, error) {
 	return projects, nil
 }
 
-func parseProjects(r io.Reader) ([]project, error) {
+func parseProjects(r io.Reader) ([]Project, error) {
 	doc, err := html.Parse(r)
 	if err != nil {
 		return nil, err
@@ -209,15 +209,15 @@ func parseProjects(r io.Reader) ([]project, error) {
 		// No gallery found on this page, which is the end of pagination
 		return nil, nil
 	}
-	var projects []project
+	var projects []Project
 	for c := range dom.YieldChildren(galleryNode, dom.Tag("div"), dom.Class("gallery-item")) {
 		projects = append(projects, parseProjectNode(c))
 	}
 	return projects, nil
 }
 
-func parseProjectNode(n *html.Node) project {
-	p := project{}
+func parseProjectNode(n *html.Node) Project {
+	p := Project{}
 	p.ID = dom.NodeAttr(n, "data-software-id")
 	if linkNode := dom.FirstChild(n, dom.Tag("a"), dom.Class("block-wrapper-link")); linkNode != nil {
 		p.URL = dom.NodeAttr(linkNode, "href")
@@ -239,11 +239,11 @@ func parseProjectNode(n *html.Node) project {
 			p.Team = append(p.Team, Person{Name: dom.NodeAttr(imgNode, "alt"), AvatarURL: dom.NodeAttr(imgNode, "src"), URL: dom.NodeAttr(c, "data-url")})
 		}
 	}
-	// Description is not directly available on the project card.
+	// Description is not directly available on the nroject card.
 	return p
 }
 
-func (d *devpostClient) fetchProject(ctx context.Context, project *project) error {
+func (d *devpostClient) fetchProject(ctx context.Context, project *Project) error {
 	// url := "https://" + d.name + ".devpost.com/submissions/" + project.ID
 	bod, err := d.get(ctx, project.URL)
 	if err != nil {
