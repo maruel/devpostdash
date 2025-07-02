@@ -13,6 +13,7 @@ Type=simple
 KillMode=mixed
 Restart=on-success
 TimeoutStopSec=600s
+# WorkingDirectory=%h/src/devpostdash
 # -host 127.0.0.1:10102 -verbose
 ExecStart=%h/go/bin/devpostdash
 ExecStop=/bin/kill -s INT $MAINPID
