@@ -7,6 +7,8 @@ that can be found in the LICENSE file.
 <html>
 
 <head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>{{.Title}}</title>
 	<style>
 		body {
@@ -41,9 +43,9 @@ that can be found in the LICENSE file.
 		.project-card {
 			position: absolute;
 			width: 400px;
-			height: 500px;
-			background-color: #ffffff;
-			background-image: radial-gradient(at top left, rgba(255, 0, 255, 0.1), transparent 30%), radial-gradient(at bottom right, rgba(0, 0, 255, 0.1), transparent 30%);
+			height: 70vh;
+			max-height: 500px;
+			background: linear-gradient(120deg, #f8fafc 0%, #e0e7ff 100%);
 			color: #ecf0f1;
 			border-radius: 12px;
 			box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
@@ -169,6 +171,20 @@ that can be found in the LICENSE file.
 			color: #5dade2;
 			text-decoration: underline;
 		}
+
+		@media screen and (orientation: portrait) {
+			.project-card {
+				width: 80vw;
+			}
+
+			.project-card.next {
+				transform: translateX(30%) translateZ(-100px) rotateY(-45deg);
+			}
+
+			.project-card.prev {
+				transform: translateX(-30%) translateZ(-100px) rotateY(45deg);
+			}
+		}
 	</style>
 </head>
 
@@ -184,10 +200,12 @@ that can be found in the LICENSE file.
 			<p class="tagline">{{.Tagline}}</p>
 			<div class="team-members">
 				{{range .Team}}
-				<div class="team-member">
-					<img src="{{.AvatarURL}}" alt="{{.Name}}" title="{{.Name}}" />
-					<span>{{.Name}}</span>
-				</div>
+				<a href="{{.URL}}">
+					<div class="team-member">
+						<img src="{{.AvatarURL}}" alt="{{.Name}}" title="{{.Name}}" />
+						<span>{{.Name}}</span>
+					</div>
+				</a>
 				{{end}}
 			</div>
 			<div class="likes">{{.Likes}}</div>
@@ -235,10 +253,23 @@ that can be found in the LICENSE file.
 				resetAutoRotate();
 			}
 
+			function requestFullscreen() {
+				const elem = document.documentElement;
+				if (elem.requestFullscreen) {
+					elem.requestFullscreen();
+				} else if (elem.webkitRequestFullscreen) { // Safari
+					elem.webkitRequestFullscreen();
+				} else if (elem.msRequestFullscreen) { // IE11
+					elem.msRequestFullscreen();
+				}
+			}
+
 			// Initial setup
 			if (cards.length > 0) {
 				updateCards();
 				resetAutoRotate();
+				// Added this to go fullscreen.
+				document.body.addEventListener('click', requestFullscreen, {once: true});
 			}
 
 			// Scroll handling
@@ -264,6 +295,28 @@ that can be found in the LICENSE file.
 					showPrev();
 				}
 			});
+
+			const carousel = document.querySelector('.card-carousel');
+			let touchStartX = 0;
+			let touchEndX = 0;
+
+			carousel.addEventListener('touchstart', (event) => {
+				touchStartX = event.changedTouches[0].screenX;
+			}, {passive: true});
+
+			carousel.addEventListener('touchend', (event) => {
+				touchEndX = event.changedTouches[0].screenX;
+				handleSwipe();
+			}, {passive: true});
+
+			function handleSwipe() {
+				const swipeThreshold = 50; // Minimum distance for a swipe
+				if (touchStartX - touchEndX > swipeThreshold) {
+					showNext();
+				} else if (touchEndX - touchStartX > swipeThreshold) {
+					showPrev();
+				}
+			}
 		});
 	</script>
 </body>
