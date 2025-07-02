@@ -44,7 +44,7 @@ func newDevpostClient(ctx context.Context, h http.RoundTripper) (devpostClient, 
 	return out, err
 }
 
-func (d *devpostClient) refreshDescriptions(ctx context.Context, site string, projects []Project) error {
+func (d *devpostClient) refreshDescriptions(ctx context.Context, projects []Project) error {
 	for i := range projects {
 		if err := d.fetchProject(ctx, &projects[i]); err != nil {
 			return err

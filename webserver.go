@@ -53,6 +53,17 @@ func (s *webserver) handleSiteRedirect(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/site/"+project+"/card", http.StatusSeeOther)
 }
 
+func handleError(ctx context.Context, w http.ResponseWriter, err error) {
+	slog.ErrorContext(ctx, "web", "err", err)
+	var herr *httpError
+	if errors.As(err, &herr) {
+		w.WriteHeader(herr.StatusCode)
+		_, _ = w.Write(herr.Body)
+		return
+	}
+	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+}
+
 func (s *webserver) handleSite(w http.ResponseWriter, r *http.Request) {
 	project := r.PathValue("project")
 	t := r.PathValue("type")
@@ -70,15 +81,14 @@ func (s *webserver) handleSite(w http.ResponseWriter, r *http.Request) {
 		var err error
 		projects, err = s.d.fetchProjects(ctx, project)
 		if err != nil {
-			var herr *httpError
-			if errors.As(err, &herr) {
-				w.WriteHeader(herr.StatusCode)
-				w.Write(herr.Body)
+			handleError(ctx, w, err)
+			return
+		}
+		if false {
+			if err := s.d.refreshDescriptions(ctx, projects); err != nil {
+				handleError(ctx, w, err)
 				return
 			}
-			slog.ErrorContext(ctx, "web", "err", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			return
 		}
 		s.mu.Lock()
 		s.cache[project] = projects
