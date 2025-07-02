@@ -20,31 +20,31 @@ import (
 )
 
 type devpostClient struct {
-	name   string
 	c      http.Client
 	header http.Header
 }
 
-func newDevpostClient(site string, h http.RoundTripper) (devpostClient, error) {
+func newDevpostClient(ctx context.Context, h http.RoundTripper) (devpostClient, error) {
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		return devpostClient{}, err
 	}
-	jar.SetCookies(&url.URL{Scheme: "https", Host: site}, []*http.Cookie{
+	jar.SetCookies(&url.URL{Scheme: "https", Host: "devpost.com"}, []*http.Cookie{
 		{Name: "platform.notifications.newsletter.dismissed", Value: "dismissed"},
 	})
 	out := devpostClient{
-		name: site,
 		header: http.Header{
 			"Referer":    []string{"https://vibe-coding-hackathon.devpost.com/rules"},
 			"User-Agent": []string{"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"},
 		},
 		c: http.Client{Transport: h, Jar: jar},
 	}
-	return out, nil
+	// Load cookies.
+	_, err = out.get(ctx, "https://devpost.com")
+	return out, err
 }
 
-func (d *devpostClient) refreshDescriptions(ctx context.Context, projects []Project) error {
+func (d *devpostClient) refreshDescriptions(ctx context.Context, site string, projects []Project) error {
 	for i := range projects {
 		if err := d.fetchProject(ctx, &projects[i]); err != nil {
 			return err
@@ -92,11 +92,11 @@ type Project struct {
 	Likes         int
 }
 
-func (d *devpostClient) fetchProjects(ctx context.Context) ([]Project, error) {
+func (d *devpostClient) fetchProjects(ctx context.Context, site string) ([]Project, error) {
 	var projects []Project
 	for i := 1; ; i++ {
 		// url := "https://" + d.name + ".devpost.com/project-gallery"
-		url := fmt.Sprintf("https://%s.devpost.com/submissions/search?page=%d&sort=alpha&terms=&utf8=%%E2%%9C%%93", d.name, i)
+		url := fmt.Sprintf("https://%s.devpost.com/submissions/search?page=%d&sort=alpha&terms=&utf8=%%E2%%9C%%93", site, i)
 		bod, err := d.get(ctx, url)
 		if err != nil {
 			return projects, err
@@ -105,9 +105,15 @@ func (d *devpostClient) fetchProjects(ctx context.Context) ([]Project, error) {
 		if bytes.Contains(bod, []byte("There are no submissions which match your criteria.")) {
 			break
 		}
+		if bytes.Contains(bod, []byte("The hackathon managers haven't published this gallery yet, but hang tight!")) {
+			break
+		}
 		p, err := parseProjects(bytes.NewReader(bod))
 		if err != nil {
 			return projects, err
+		}
+		if len(p) == 0 {
+			break
 		}
 		projects = append(projects, p...)
 	}
@@ -167,7 +173,6 @@ func parseProjectNode(n *html.Node) Project {
 }
 
 func (d *devpostClient) fetchProject(ctx context.Context, project *Project) error {
-	// url := "https://" + d.name + ".devpost.com/submissions/" + project.ID
 	bod, err := d.get(ctx, project.URL)
 	if err != nil {
 		return err

@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -21,19 +22,45 @@ var templatesFS embed.FS
 
 var templates = template.Must(template.ParseFS(templatesFS, "templates/*.html"))
 
-func runWebserver(ctx context.Context, host, title string, projects []Project) error {
-	tmpl := templates.Lookup("cards.html")
-	if tmpl == nil {
-		return fmt.Errorf("failed to parse template cards.html")
-	}
+func runWebserver(ctx context.Context, host string, d *devpostClient) error {
+	mu := sync.Mutex{}
+	cache := map[string][]Project{}
 
 	mux := http.ServeMux{}
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if err := templates.Lookup("root.html").Execute(w, nil); err != nil {
+			slog.ErrorContext(ctx, "web", "err", err)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
+	})
+	mux.HandleFunc("GET /site/", func(w http.ResponseWriter, r *http.Request) {
+		project := r.URL.Path[len("/site/"):]
+		if project == "" {
+			http.Redirect(w, r, "/", http.StatusSeeOther)
+			return
+		}
+
+		mu.Lock()
+		projects, ok := cache[project]
+		mu.Unlock()
+		if !ok {
+			var err error
+			projects, err = d.fetchProjects(ctx, project)
+			if err != nil {
+				slog.ErrorContext(ctx, "web", "err", err)
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				return
+			}
+			mu.Lock()
+			cache[project] = projects
+			mu.Unlock()
+		}
 		data := map[string]any{
-			"Title":    title,
+			"Title":    project,
 			"Projects": projects,
 		}
-		if err := tmpl.Execute(w, data); err != nil {
+		if err := templates.Lookup("cards.html").Execute(w, data); err != nil {
 			slog.ErrorContext(ctx, "web", "err", err)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		}

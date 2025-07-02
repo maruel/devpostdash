@@ -174,15 +174,11 @@ func mainImpl() error {
 	verbose := flag.Bool("verbose", false, "verbose mode")
 	record := flag.Bool("record", false, "record mode")
 	host := flag.String("host", ":8080", "host")
-	dump := flag.Bool("dump", false, "dump mode")
-	site := flag.String("site", "", "site")
+	dump := flag.String("dump", "", "dump mode")
 	flag.Parse()
 
 	if flag.NArg() != 0 {
 		return errors.New("unknown arguments")
-	}
-	if *site == "" {
-		return errors.New("required flag: -site")
 	}
 	if *verbose {
 		Level.Set(slog.LevelDebug)
@@ -197,23 +193,23 @@ func mainImpl() error {
 		defer rr.Stop()
 		h = rr
 	}
-	d, err := newDevpostClient(*site, &roundtrippers.Throttle{Transport: h, QPS: 1})
+	d, err := newDevpostClient(ctx, &roundtrippers.Throttle{Transport: h, QPS: 1})
 	if err != nil {
 		return err
 	}
 
-	projects, err := d.fetchProjects(ctx)
-	if err != nil {
-		return err
-	}
-	if len(projects) == 0 {
-		return errors.New("no projects found")
-	}
-	if *dump {
+	if *dump != "" {
+		projects, err := d.fetchProjects(ctx, *dump)
+		if err != nil {
+			return err
+		}
+		if len(projects) == 0 {
+			return errors.New("no projects found")
+		}
 		printProjects(projects)
 		return nil
 	}
-	return runWebserver(ctx, *host, *site, projects)
+	return runWebserver(ctx, *host, &d)
 }
 
 func main() {
