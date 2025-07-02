@@ -11,15 +11,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/cookiejar"
-	"os"
-	"time"
 
 	"github.com/maruel/devpostdash/dom"
-	"github.com/maruel/roundtrippers"
 	"golang.org/x/net/html"
-	"golang.org/x/sync/errgroup"
-	"gopkg.in/dnaeon/go-vcr.v4/pkg/cassette"
-	"gopkg.in/dnaeon/go-vcr.v4/pkg/recorder"
 )
 
 // Config is the content of config.yml.
@@ -27,75 +21,6 @@ type Config struct {
 	Name   string
 	ID     string
 	Cookie string
-}
-
-func scrapeDevpost(ctx context.Context, c Config) ([]Project, error) {
-	ch := make(chan roundtrippers.Record)
-	eg, ctx := errgroup.WithContext(ctx)
-	eg.Go(func() error {
-		for i := 0; ; i++ {
-			select {
-			case r, ok := <-ch:
-				if !ok {
-					return nil
-				}
-				if r.Response != nil {
-					f, err := os.Create(fmt.Sprintf("testdata/get%03d.html", i))
-					if err != nil {
-						return err
-					}
-					_, err = io.Copy(f, r.Response.Body)
-					_ = f.Close()
-					if err != nil {
-						return err
-					}
-				}
-			case <-ctx.Done():
-				return nil
-			}
-		}
-	})
-	h := &roundtrippers.Capture{
-		Transport: &roundtrippers.Throttle{
-			Transport: http.DefaultTransport, QPS: 1,
-		},
-		C: ch,
-	}
-	rr, err := recorder.New("testdata/main",
-		recorder.WithMode(recorder.ModeRecordOnce),
-		recorder.WithSkipRequestLatency(true),
-		recorder.WithRealTransport(h),
-		recorder.WithHook(trimResponseHeaders, recorder.AfterCaptureHook),
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rr.Stop()
-	d, err := newDevpostClient(&c, rr)
-	if err != nil {
-		return nil, err
-	}
-	projects, err := d.fetchProjects(ctx)
-	if err != nil {
-		return nil, err
-	}
-	// TODO: Maybe not necessary.
-	for i := range projects {
-		if err = d.fetchProject(ctx, &projects[i]); err != nil {
-			return nil, err
-		}
-	}
-	return projects, nil
-}
-
-func trimResponseHeaders(i *cassette.Interaction) error {
-	i.Request.Headers.Del("Authorization")
-	i.Request.Headers.Del("X-Request-Id")
-	i.Response.Headers.Del("Set-Cookie")
-	i.Response.Headers.Del("Date")
-	i.Response.Headers.Del("X-Request-Id")
-	i.Response.Duration = i.Response.Duration.Round(time.Millisecond)
-	return nil
 }
 
 type devpostClient struct {
@@ -108,7 +33,7 @@ type devpostClient struct {
 func newDevpostClient(c *Config, h http.RoundTripper) (devpostClient, error) {
 	jar, err := cookiejar.New(nil)
 	if err != nil {
-		panic(err)
+		return devpostClient{}, err
 	}
 	out := devpostClient{
 		name: c.Name,
@@ -121,6 +46,15 @@ func newDevpostClient(c *Config, h http.RoundTripper) (devpostClient, error) {
 		c: http.Client{Transport: h, Jar: jar},
 	}
 	return out, nil
+}
+
+func (d *devpostClient) refreshDescriptions(ctx context.Context, projects []Project) error {
+	for i := range projects {
+		if err := d.fetchProject(ctx, &projects[i]); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (d *devpostClient) get(ctx context.Context, url string) ([]byte, error) {

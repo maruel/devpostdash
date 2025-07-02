@@ -67,20 +67,18 @@
 				<th>Title</th>
 				<th>Tagline</th>
 				<th>Team</th>
-				<th>Winner</th>
 			</tr>
 		</thead>
 		<tbody>
 			{{range .}}
 			<tr>
-				<td>{{.Title}}</td>
+				<td>{{.Title}}{{if .Winner}} 🏆{{end}}</td>
 				<td>{{.Tagline}}</td>
 				<td>
 					{{range .Team}}
 					<img src="{{.AvatarURL}}" width="50" height="50" />
 					{{end}}
 				</td>
-				<td>{{if .Winner}}Yes{{else}}No{{end}}</td>
 			</tr>
 			{{end}}
 		</tbody>

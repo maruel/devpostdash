@@ -8,15 +8,22 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"time"
 
 	"github.com/goccy/go-yaml"
+	"github.com/maruel/roundtrippers"
+	"golang.org/x/sync/errgroup"
+	"gopkg.in/dnaeon/go-vcr.v4/pkg/cassette"
+	"gopkg.in/dnaeon/go-vcr.v4/pkg/recorder"
 )
 
 func printProjects(projects []Project) {
@@ -32,26 +39,29 @@ func printProjects(projects []Project) {
 	}
 }
 
-func runWebserver(ctx context.Context, projects []Project) error {
+func runWebserver(ctx context.Context, host string, projects []Project) error {
 	tmpl, err := template.ParseFiles("templates/index.html")
 	if err != nil {
 		return fmt.Errorf("failed to parse template: %w", err)
 	}
 
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	mux := http.ServeMux{}
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if err := tmpl.Execute(w, projects); err != nil {
 			log.Printf("Error executing template: %v", err)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		}
 	})
 
-	port := ":8080"
-	log.Printf("Starting server on port %s", port)
-
-	server := &http.Server{Addr: port}
+	ln, err := net.Listen("tcp", host)
+	if err != nil {
+		return err
+	}
+	log.Printf("Listening on %s", ln.Addr())
+	s := &http.Server{Handler: &mux}
 	errCh := make(chan error)
 	go func() {
-		err2 := server.ListenAndServe()
+		err2 := s.Serve(ln)
 		if errors.Is(err2, http.ErrServerClosed) {
 			err2 = nil
 		}
@@ -62,7 +72,7 @@ func runWebserver(ctx context.Context, projects []Project) error {
 	case <-ctx.Done():
 		log.Printf("Shutting down ...")
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		err := server.Shutdown(shutdownCtx)
+		err := s.Shutdown(shutdownCtx)
 		shutdownCancel()
 		if err != nil {
 			return fmt.Errorf("server shutdown failed: %w", err)
@@ -76,10 +86,72 @@ func runWebserver(ctx context.Context, projects []Project) error {
 	return nil
 }
 
+// httpRecorder records HTTP requests and responses to testdata/.
+func httpRecorder(ctx context.Context) (*recorder.Recorder, error) {
+	ch := make(chan roundtrippers.Record)
+	eg, ctx := errgroup.WithContext(ctx)
+	eg.Go(func() error {
+		for i := 0; ; i++ {
+			select {
+			case r, ok := <-ch:
+				if !ok {
+					return nil
+				}
+				if r.Response != nil {
+					f, err := os.Create(fmt.Sprintf("testdata/get%03d.html", i))
+					if err != nil {
+						return err
+					}
+					_, err = io.Copy(f, r.Response.Body)
+					_ = f.Close()
+					if err != nil {
+						return err
+					}
+				}
+			case <-ctx.Done():
+				return nil
+			}
+		}
+	})
+	h := &roundtrippers.Capture{Transport: http.DefaultTransport, C: ch}
+	rr, err := recorder.New("testdata/main",
+		recorder.WithMode(recorder.ModeRecordOnce),
+		recorder.WithSkipRequestLatency(true),
+		recorder.WithRealTransport(h),
+		recorder.WithHook(trimResponseHeaders, recorder.AfterCaptureHook),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return rr, nil
+}
+
+func trimResponseHeaders(i *cassette.Interaction) error {
+	i.Request.Headers.Del("Authorization")
+	i.Request.Headers.Del("X-Request-Id")
+	i.Response.Headers.Del("Set-Cookie")
+	i.Response.Headers.Del("Date")
+	i.Response.Headers.Del("X-Request-Id")
+	i.Response.Duration = i.Response.Duration.Round(time.Millisecond)
+	return nil
+}
+
 func mainImpl() error {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
+	verbose := flag.Bool("verbose", false, "verbose mode")
+	record := flag.Bool("record", false, "record mode")
+	host := flag.String("host", ":8080", "host")
+	dump := flag.Bool("dump", false, "dump mode")
+	flag.Parse()
+
+	if flag.NFlag() != 0 {
+		return errors.New("unknown flags")
+	}
+	if *verbose {
+		// log.SetLevel(log.DebugLevel)
+	}
 	config, err := os.ReadFile("config.yml")
 	if err != nil {
 		return err
@@ -88,16 +160,34 @@ func mainImpl() error {
 	if err := yaml.Unmarshal(config, &c); err != nil {
 		return err
 	}
-	projects, err := scrapeDevpost(ctx, c)
+
+	h := http.DefaultTransport
+	if *record {
+		rr, err := httpRecorder(ctx)
+		if err != nil {
+			return err
+		}
+		defer rr.Stop()
+		h = rr
+	}
+	d, err := newDevpostClient(&c, &roundtrippers.Throttle{Transport: h, QPS: 1})
+	if err != nil {
+		return err
+	}
+
+	projects, err := d.fetchProjects(ctx)
 	if err != nil {
 		return err
 	}
 	if len(projects) == 0 {
 		return errors.New("no projects found")
 	}
+	if *dump {
+		printProjects(projects)
+		return nil
+	}
 	log.Printf("Found %d projects", len(projects))
-	printProjects(projects)
-	return runWebserver(ctx, projects)
+	return runWebserver(ctx, *host, projects)
 }
 
 func main() {
