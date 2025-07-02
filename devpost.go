@@ -53,6 +53,15 @@ func (d *devpostClient) refreshDescriptions(ctx context.Context, site string, pr
 	return nil
 }
 
+type httpError struct {
+	StatusCode int
+	Body       []byte
+}
+
+func (e httpError) Error() string {
+	return fmt.Sprintf("status code: %d", e.StatusCode)
+}
+
 func (d *devpostClient) get(ctx context.Context, url string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -68,7 +77,7 @@ func (d *devpostClient) get(ctx context.Context, url string) ([]byte, error) {
 		return nil, err
 	}
 	if resp.StatusCode != 200 {
-		err = fmt.Errorf("status code: %d", resp.StatusCode)
+		err = &httpError{StatusCode: resp.StatusCode, Body: bod}
 	}
 	return bod, err
 }
