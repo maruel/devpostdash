@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-func runWebserver(ctx context.Context, host string, projects []Project) error {
+func runWebserver(ctx context.Context, host, title string, projects []Project) error {
 	tmpl, err := template.ParseFiles("templates/index.html")
 	if err != nil {
 		return fmt.Errorf("failed to parse template: %w", err)
@@ -23,13 +23,18 @@ func runWebserver(ctx context.Context, host string, projects []Project) error {
 
 	mux := http.ServeMux{}
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if err := tmpl.Execute(w, projects); err != nil {
+		data := map[string]any{
+			"Title":    title,
+			"Projects": projects,
+		}
+		if err := tmpl.Execute(w, data); err != nil {
 			slog.ErrorContext(ctx, "web", "err", err)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		}
 	})
 
-	ln, err := net.Listen("tcp", host)
+	lc := net.ListenConfig{}
+	ln, err := lc.Listen(ctx, "tcp", host)
 	if err != nil {
 		return err
 	}

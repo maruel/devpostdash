@@ -2,7 +2,7 @@
 <html>
 
 <head>
-	<title>Devpost Projects</title>
+	<title>{{.Title}}</title>
 	<style>
 		body {
 			font-family: sans-serif;
@@ -60,7 +60,7 @@
 </head>
 
 <body>
-	<h1>Devpost Projects</h1>
+	<h1>{{.Title}}</h1>
 	<table border="1">
 		<thead>
 			<tr>
@@ -70,7 +70,7 @@
 			</tr>
 		</thead>
 		<tbody>
-			{{range .}}
+			{{range .Projects}}
 			<tr>
 				<td>{{.Title}}{{if .Winner}} 🏆{{end}}</td>
 				<td>{{.Tagline}}</td>

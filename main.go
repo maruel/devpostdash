@@ -218,7 +218,7 @@ func mainImpl() error {
 		printProjects(projects)
 		return nil
 	}
-	return runWebserver(ctx, *host, projects)
+	return runWebserver(ctx, *host, c.Name, projects)
 }
 
 func main() {
