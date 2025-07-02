@@ -16,7 +16,7 @@ import (
 )
 
 func runWebserver(ctx context.Context, host, title string, projects []Project) error {
-	tmpl, err := template.ParseFiles("templates/index.html")
+	tmpl, err := template.ParseFiles("templates/cards.html")
 	if err != nil {
 		return fmt.Errorf("failed to parse template: %w", err)
 	}
