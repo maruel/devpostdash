@@ -178,8 +178,8 @@ func mainImpl() error {
 	dump := flag.Bool("dump", false, "dump mode")
 	flag.Parse()
 
-	if flag.NFlag() != 0 {
-		return errors.New("unknown flags")
+	if flag.NArg() != 0 {
+		return errors.New("unknown arguments")
 	}
 	if *verbose {
 		Level.Set(slog.LevelDebug)
