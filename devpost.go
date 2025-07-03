@@ -48,7 +48,7 @@ type Project struct {
 
 type Event struct {
 	ID          string
-	Projects    []Project
+	Projects    []*Project
 	LastRefresh time.Time
 }
 
@@ -133,7 +133,7 @@ func (d *devpostClient) get(ctx context.Context, url string) ([]byte, error) {
 	return bod, err
 }
 
-func (d *devpostClient) fetchProjects(ctx context.Context, eventID string) ([]Project, error) {
+func (d *devpostClient) fetchProjects(ctx context.Context, eventID string) ([]*Project, error) {
 	d.mu.Lock()
 	e, ok := d.events[eventID]
 	d.mu.Unlock()
@@ -141,7 +141,7 @@ func (d *devpostClient) fetchProjects(ctx context.Context, eventID string) ([]Pr
 		return e.Projects, nil
 	}
 
-	var projects []Project
+	var projects []*Project
 	var err error
 	start := time.Now()
 	defer func() {
@@ -166,7 +166,7 @@ func (d *devpostClient) fetchProjects(ctx context.Context, eventID string) ([]Pr
 		if bytes.Contains(bod, []byte("The hackathon managers haven't published this gallery yet, but hang tight!")) {
 			break
 		}
-		var p []Project
+		var p []*Project
 		if p, err = parseProjects(bytes.NewReader(bod)); err != nil {
 			return projects, err
 		}
@@ -211,7 +211,7 @@ func (d *devpostClient) fetchProject(ctx context.Context, project *Project) erro
 
 //
 
-func parseProjects(r io.Reader) ([]Project, error) {
+func parseProjects(r io.Reader) ([]*Project, error) {
 	doc, err := html.Parse(r)
 	if err != nil {
 		return nil, err
@@ -221,9 +221,10 @@ func parseProjects(r io.Reader) ([]Project, error) {
 		// No gallery found on this page, which is the end of pagination
 		return nil, nil
 	}
-	var projects []Project
+	var projects []*Project
 	for c := range dom.YieldChildren(galleryNode, dom.Tag("div"), dom.Class("gallery-item")) {
-		projects = append(projects, parseProjectNode(c))
+		p := parseProjectNode(c)
+		projects = append(projects, &p)
 	}
 	return projects, nil
 }
@@ -269,5 +270,5 @@ type httpError struct {
 }
 
 func (e httpError) Error() string {
-	return fmt.Sprintf("status code: %d", e.StatusCode)
+	return fmt.Sprintf("status %d: %s", e.StatusCode, e.Body)
 }

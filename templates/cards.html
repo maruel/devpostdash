@@ -64,7 +64,7 @@
 <h1>{{.Title}}</h1>
 <div class="project-container" id="projects-container">
   {{range .Projects}}
-  <project-card url="{{.URL}}" title="{{.Title}}" {{if .Winner}}winner{{end}} tagline="{{.Tagline}}" likes="{{.Likes}}" team='{{.TeamJSON}}'>
+  <project-card url="{{.URL}}" project-id="{{.ID}}" title="{{.Title}}" {{if .Winner}}winner{{end}} tagline="{{.Tagline}}" likes="{{.Likes}}" team='{{.TeamJSON}}'>
   </project-card>
   {{end}}
 </div>

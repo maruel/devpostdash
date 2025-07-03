@@ -17,6 +17,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/maruel/genai"
 )
 
 //go:embed templates/*.html
@@ -25,22 +27,23 @@ var templatesFS embed.FS
 var templates = template.Must(template.ParseFS(templatesFS, "templates/*.html"))
 
 type webserver struct {
-	d *devpostClient
+	d   *devpostClient
+	llm genai.ProviderGen
 }
 
 func (s *webserver) handleRoot(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	ctx := r.Context()
 	if err := templates.Lookup("root.html").Execute(w, nil); err != nil {
-		slog.ErrorContext(r.Context(), "web", "err", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		handleError(ctx, w, err)
 	}
 }
 
 func (s *webserver) handleAbout(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	ctx := r.Context()
 	if err := templates.Lookup("about.html").Execute(w, nil); err != nil {
-		slog.ErrorContext(r.Context(), "web", "err", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		handleError(ctx, w, err)
 	}
 }
 
@@ -83,7 +86,7 @@ func (s *webserver) handleEvent(w http.ResponseWriter, r *http.Request) {
 
 	// projectData is a superset of Project.
 	type projectData struct {
-		Project
+		*Project
 		TeamJSON string
 	}
 	templateProjects := make([]projectData, len(projects))
@@ -93,25 +96,22 @@ func (s *webserver) handleEvent(w http.ResponseWriter, r *http.Request) {
 			handleError(ctx, w, err)
 			return
 		}
-		templateProjects[i] = projectData{
-			Project:  p,
-			TeamJSON: string(teamJSON),
-		}
+		templateProjects[i] = projectData{Project: p, TeamJSON: string(teamJSON)}
 	}
 	sort.Slice(templateProjects, func(i, j int) bool {
 		return templateProjects[i].Likes > templateProjects[j].Likes
 	})
 	data := map[string]any{
 		"Title":    eventID,
+		"EventID":  eventID,
 		"Projects": templateProjects,
 	}
 	if err := templates.Lookup(t+".html").Execute(w, data); err != nil {
-		slog.ErrorContext(ctx, "web", "err", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		handleError(ctx, w, err)
 	}
 }
 
-func (s *webserver) handleEventAPI(w http.ResponseWriter, r *http.Request) {
+func (s *webserver) apiEvent(w http.ResponseWriter, r *http.Request) {
 	eventID := r.PathValue("eventID")
 	ctx := r.Context()
 	projects, err := s.d.fetchProjects(ctx, eventID)
@@ -121,43 +121,94 @@ func (s *webserver) handleEventAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(projects); err != nil {
-		slog.ErrorContext(ctx, "web", "err", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		handleError(ctx, w, err)
 	}
 }
 
-func (s *webserver) handleProjectAPI(w http.ResponseWriter, r *http.Request) {
+func (s *webserver) apiProject(w http.ResponseWriter, r *http.Request) {
 	projectID := r.PathValue("projectID")
 	eventID := r.PathValue("eventID")
 	ctx := r.Context()
-	// This will load from cache.
-	projects, err := s.d.fetchProjects(ctx, eventID)
+	p, err := s.getProject(ctx, eventID, projectID)
 	if err != nil {
 		handleError(ctx, w, err)
 		return
 	}
-	var foundProject *Project
-	for i := range projects {
-		if projects[i].ID == projectID {
-			foundProject = &projects[i]
-			break
-		}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(p); err != nil {
+		handleError(ctx, w, err)
 	}
-	if foundProject == nil {
-		http.Error(w, "Project not found", http.StatusNotFound)
+}
+
+func (s *webserver) apiRoast(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		EventID   string `json:"event_id"`
+		ProjectID string `json:"project_id"`
+	}
+	ctx := r.Context()
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		handleError(ctx, w, &httpError{StatusCode: http.StatusBadRequest, Body: []byte(err.Error())})
 		return
 	}
-	// Refresh description and tags for the single project
-	if err := s.d.fetchProject(ctx, foundProject); err != nil {
+	p, err := s.getProject(ctx, req.EventID, req.ProjectID)
+	if err != nil {
 		handleError(ctx, w, err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(foundProject); err != nil {
-		slog.ErrorContext(ctx, "web", "err", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	teamNames := make([]string, len(p.Team))
+	for i, p := range p.Team {
+		teamNames[i] = p.Name
 	}
+
+	prompt := fmt.Sprintf(
+		"Roast the following project. Be funny and concise. Reply with only one hard hitting sentence, nothing else.\nProject name: %s\nTag line: %s\nTeam members: %s\nTags: %s\nWhole Description:\n%s",
+		p.Title,
+		p.Tagline,
+		strings.Join(teamNames, ", "),
+		strings.Join(p.Tags, ", "),
+		p.Description)
+	msgs := genai.Messages{genai.NewTextMessage(genai.User, prompt)}
+	resp, err := s.llm.GenSync(ctx, msgs, &genai.OptionsText{Temperature: 1.0})
+	if err != nil {
+		handleError(ctx, w, err)
+		return
+	}
+	roastContent := resp.AsText()
+	if roastContent == "" {
+		handleError(ctx, w, errors.New("no content generated"))
+		return
+	}
+	slog.InfoContext(ctx, "roast", "content", roastContent)
+	w.Header().Set("Content-Type", "application/json")
+	if err = json.NewEncoder(w).Encode(map[string]string{"content": roastContent}); err != nil {
+		handleError(ctx, w, err)
+	}
+}
+
+func (s *webserver) getProject(ctx context.Context, eventID, projectID string) (*Project, error) {
+	projects, err := s.d.fetchProjects(ctx, eventID)
+	if err != nil {
+		return nil, err
+	}
+	var p *Project
+	for i := range projects {
+		if projects[i].ID == projectID {
+			p = projects[i]
+			break
+		}
+	}
+	if p == nil {
+		return nil, &httpError{
+			StatusCode: http.StatusNotFound,
+			Body:       []byte(fmt.Sprintf("project %q not found", eventID+"/"+projectID)),
+		}
+	}
+	// Refresh description and tags for the single project
+	if err := s.d.fetchProject(ctx, p); err != nil {
+		return nil, err
+	}
+	return p, nil
 }
 
 func loggingMiddleware(next http.Handler) http.Handler {
@@ -203,15 +254,16 @@ func getRealIP(r *http.Request) net.IP {
 	return nil
 }
 
-func runWebserver(ctx context.Context, host string, d *devpostClient) error {
-	w := &webserver{d: d}
+func runWebserver(ctx context.Context, host string, d *devpostClient, c genai.ProviderGen) error {
+	w := &webserver{d: d, llm: c}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", w.handleRoot)
 	mux.HandleFunc("GET /about", w.handleAbout)
 	mux.HandleFunc("GET /event/{eventID}", w.handleEventRedirect)
 	mux.HandleFunc("GET /event/{eventID}/{type}", w.handleEvent)
-	mux.HandleFunc("GET /api/events/{eventID}", w.handleEventAPI)
-	mux.HandleFunc("GET /api/events/{eventID}/{projectID}", w.handleProjectAPI)
+	mux.HandleFunc("GET /api/events/{eventID}", w.apiEvent)
+	mux.HandleFunc("GET /api/events/{eventID}/{projectID}", w.apiProject)
+	mux.HandleFunc("POST /api/roast", w.apiRoast)
 
 	lc := net.ListenConfig{}
 	ln, err := lc.Listen(ctx, "tcp", host)

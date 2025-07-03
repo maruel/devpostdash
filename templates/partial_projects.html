@@ -26,6 +26,7 @@
 			let card = existingCards.get(project.URL);
 			if (!card) {
 				card = document.createElement('project-card');
+				card.setAttribute('project-id', project.ID);
 				card.setAttribute('url', project.URL);
 				container.appendChild(card);
 			} else {
@@ -44,7 +45,7 @@
 		// Remove old cards
 		existingCards.forEach(card => card.remove());
 		await renderProjectDetails(projects, eventID);
-		document.dispatchEvent(new CustomEvent('projectsRendered', { detail: projects }));
+		document.dispatchEvent(new CustomEvent('projectsRendered', {detail: projects}));
 	}
 
 	async function renderProjectDetails(projects, eventID) {

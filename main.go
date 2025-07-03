@@ -22,6 +22,9 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/lmittmann/tint"
+	"github.com/maruel/genai"
+	"github.com/maruel/genai/base"
+	"github.com/maruel/genai/providers"
 	"github.com/maruel/roundtrippers"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
@@ -30,7 +33,7 @@ import (
 	"gopkg.in/dnaeon/go-vcr.v4/pkg/recorder"
 )
 
-func printProjects(projects []Project) {
+func printProjects(projects []*Project) {
 	for _, p := range projects {
 		fmt.Printf("%s: %s\n", p.Title, p.URL)
 		// ID, URL, Image, Description, Team
@@ -190,6 +193,8 @@ func mainImpl() error {
 	record := flag.Bool("record", false, "record mode")
 	host := flag.String("host", ":8080", "host")
 	dump := flag.String("dump", "", "dump mode")
+	provider := flag.String("provider", "cerebras", "LLM provider to use")
+	model := flag.String("model", base.PreferredGood, "LLM model to use")
 	flag.Parse()
 
 	if flag.NArg() != 0 {
@@ -233,7 +238,23 @@ func mainImpl() error {
 		printProjects(projects)
 		return nil
 	}
-	return runWebserver(ctx, *host, d)
+
+	var c genai.ProviderGen
+	if *provider != "" {
+		prov := providers.All[*provider]
+		if prov == nil {
+			return fmt.Errorf("unknown provider %q", *provider)
+		}
+		cl, err := prov(*model, nil)
+		if err != nil {
+			return err
+		}
+		ok := false
+		if c, ok = cl.(genai.ProviderGen); !ok {
+			return fmt.Errorf("%T does not implement genai.ProviderGen", *provider)
+		}
+	}
+	return runWebserver(ctx, *host, d, c)
 }
 
 func main() {

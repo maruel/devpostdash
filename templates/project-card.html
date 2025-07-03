@@ -51,6 +51,14 @@
 			margin-bottom: 15px;
 		}
 
+		.roast-tagline {
+			font-style: italic;
+			color: #7f8c8d;
+			margin-top: 10px;
+			margin-bottom: 15px;
+			font-size: 0.95em;
+		}
+
 		.likes {
 			font-weight: bold;
 			color: #e74c3c;
@@ -99,6 +107,7 @@
     <span id="tagline-content"></span>
   </p>
   <div class="team-avatars"></div>
+  <p class="roast-tagline" id="roast-tagline-content"></p>
   <p class="description">
     <span id="description-content"></span>
   </p>
@@ -115,6 +124,7 @@
 			this.attachShadow({mode: 'open'});
 			const template = document.getElementById('project-card-template').content;
 			this.shadowRoot.appendChild(template.cloneNode(true));
+			this._isIntersecting = false; // Initialize visibility flag
 		}
 
 		static get observedAttributes() {
@@ -123,6 +133,17 @@
 
 		connectedCallback() {
 			this._render();
+
+			const observer = new IntersectionObserver((entries, observer) => {
+				entries.forEach(entry => {
+					this._isIntersecting = entry.isIntersecting; // Update visibility flag
+					if (entry.isIntersecting) {
+						this._loadRoastTagline(); // Call when it becomes visible
+					}
+				});
+			}, {threshold: 0.1}); // Trigger when 10% of the element is visible
+
+			observer.observe(this);
 		}
 
 		attributeChangedCallback(name, oldValue, newValue) {
@@ -178,6 +199,38 @@
 			} catch (e) {
 				console.error('Error parsing tags attribute:', e);
 			}
+
+			// If _render() is called and the element is currently visible, call _loadRoastTagline()
+			if (this._isIntersecting) {
+				this._loadRoastTagline();
+			}
+		}
+
+		async _loadRoastTagline() {
+			const eventID = '{{.EventID}}';
+			const projectID = this.getAttribute('project-id');
+			const elem = this.shadowRoot.querySelector('#roast-tagline-content');
+			if (elem.textContent || !this.getAttribute('description')) {
+				// Do not update the roast once created or if the description is not loaded yet.
+				return false;
+			}
+			elem.textContent = 'Loading roast tagline...';
+			try {
+				const response = await fetch('/api/roast', {
+					method: 'POST',
+					headers: {'Content-Type': 'application/json', },
+					body: JSON.stringify({'event_id': eventID, 'project_id': projectID}),
+				});
+				if (!response.ok) {
+					throw new Error(`HTTP error! status: ${response.status}`);
+				}
+				const data = await response.json();
+				elem.textContent = data.content;
+			} catch (error) {
+				console.error('Error fetching roast tagline:', error);
+				elem.textContent = 'Error loading roast tagline.';
+			}
+			return true;
 		}
 	}
 
