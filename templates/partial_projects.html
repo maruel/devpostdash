@@ -2,61 +2,85 @@
 <script>
   'use strict';
 
-	async function fetchProjects(project) {
+	async function fetchProjects(eventID) {
 		try {
-			const response = await fetch(`/api/projects/${project}`);
+			const response = await fetch(`/api/events/${eventID}`);
 			if (!response.ok) {
 				throw new Error(`HTTP error! status: ${response.status}`);
 			}
-			const projects = await response.json();
-			return projects;
+			return await response.json();
 		} catch (error) {
-			console.error('Error fetching projects:', error);
-			location.reload(); // Full page refresh on error
+			console.error('Error fetching project IDs:', error);
+			location.reload();
+			return [];
 		}
 	}
 
-	function renderProjects(projects) {
+	async function renderProjects(eventID) {
 		const container = document.getElementById('projects-container');
 		const existingCards = new Map(Array.from(container.children).map(card => [card.getAttribute('url'), card]));
+		const projects = await fetchProjects(eventID);
 
-		projects.forEach(project => {
-			const card = existingCards.get(project.URL);
-			if (card) {
-				// Update existing card
-				if (card.getAttribute('likes') !== project.Likes.toString()) {
-					card.setAttribute('likes', project.Likes);
-				}
-				existingCards.delete(project.URL);
+		// First pass: Create/update cards based on project IDs (initial rendering)
+		projects.forEach((project) => {
+			let card = existingCards.get(project.URL);
+			if (!card) {
+				card = document.createElement('project-card');
+				card.setAttribute('url', project.URL);
+				container.appendChild(card);
 			} else {
-				// Add new card
-				const newCard = document.createElement('project-card');
-				newCard.setAttribute('url', project.URL);
-				newCard.setAttribute('title', project.Title);
-				if (project.Winner) {
-					newCard.setAttribute('winner', '');
-				}
-				newCard.setAttribute('tagline', project.Tagline);
-				newCard.setAttribute('likes', project.Likes);
-				newCard.setAttribute('team', JSON.stringify(project.Team));
-				container.appendChild(newCard);
+				existingCards.delete(project.URL);
 			}
+			card.setAttribute('title', project.Title);
+			if (project.Winner) {
+				card.setAttribute('winner', '');
+			}
+			card.setAttribute('tagline', project.Tagline);
+			if (card.getAttribute('likes') !== project.Likes.toString()) {
+				card.setAttribute('likes', project.Likes);
+			}
+			card.setAttribute('team', JSON.stringify(project.Team));
 		});
-
 		// Remove old cards
 		existingCards.forEach(card => card.remove());
+
+		// Second pass: Fetch detailed information and update existing cards
+		const detailedProjects = await Promise.all(projects.map(async (project) => {
+			const detailResponse = await fetch(`/api/events/${eventID}/${project.ID}`);
+			if (!detailResponse.ok) {
+				console.error(`HTTP error! status: ${detailResponse.status} for project ID: ${project.ID}`);
+				return null;
+			}
+			return detailResponse.json();
+		}));
+
+		detailedProjects.forEach(project => {
+			if (project) {
+				const card = document.querySelector(`project-card[url="${project.URL}"]`);
+				if (card) {
+					card.setAttribute('title', project.Title);
+					if (project.Winner) {
+						card.setAttribute('winner', '');
+					}
+					card.setAttribute('tagline', project.Tagline);
+					if (card.getAttribute('likes') !== project.Likes.toString()) {
+						card.setAttribute('likes', project.Likes);
+					}
+					card.setAttribute('team', JSON.stringify(project.Team));
+					card.setAttribute('description', JSON.stringify(project.Description));
+					card.setAttribute('tags', JSON.stringify(project.Tags));
+				}
+			}
+		});
 	}
 
 	window.addEventListener('load', async () => {
-		// Assuming 'project' is available globally or can be extracted from the URL
 		const pathParts = window.location.pathname.split('/');
-		const project = pathParts[pathParts.indexOf('site') + 1];
-		if (project) {
-			const projects = await fetchProjects(project);
-			renderProjects(projects);
+		const eventID = pathParts[pathParts.indexOf('event') + 1];
+		if (eventID) {
+			renderProjects(eventID);
 			setInterval(async () => {
-				const projects = await fetchProjects(project);
-				renderProjects(projects);
+				renderProjects(eventID);
 			}, 30000);
 		}
 	});

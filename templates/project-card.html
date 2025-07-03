@@ -65,6 +65,29 @@
 			content: '❤️';
 			margin-right: 5px;
 		}
+
+		.description {
+			margin-bottom: 15px;
+			color: #555;
+			font-size: 0.9em;
+			line-height: 1.5;
+		}
+
+		.tags {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 8px;
+			margin-top: 10px;
+			margin-bottom: 15px;
+		}
+
+		.cp-tag {
+			background-color: #e0e0e0;
+			color: #333;
+			padding: 5px 10px;
+			border-radius: 5px;
+			font-size: 0.8em;
+		}
   </style>
   <h2>
     <a href="">
@@ -76,6 +99,10 @@
     <slot name="tagline"></slot>
   </p>
   <div class="team-avatars"></div>
+  <p class="description">
+    <slot name="description"></slot>
+  </p>
+  <div class="tags"></div>
   <div class="likes">
     <slot name="likes"></slot>
   </div>
@@ -106,6 +133,15 @@
 				teamMember.setAttribute('member-name', member.Name);
 				teamMember.setAttribute('member-url', member.URL);
 				avatarsContainer.appendChild(teamMember);
+			});
+			this.shadowRoot.querySelector('slot[name="description"]').innerHTML = this.getAttribute('description');
+			const tags = JSON.parse(this.getAttribute('tags') || '[]');
+			const tagsContainer = this.shadowRoot.querySelector('.tags');
+			tags.forEach(tag => {
+				const tagSpan = document.createElement('span');
+				tagSpan.textContent = tag;
+				tagSpan.classList.add('cp-tag');
+				tagsContainer.appendChild(tagSpan);
 			});
 		}
 	}

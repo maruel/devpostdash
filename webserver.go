@@ -7,13 +7,14 @@ package main
 import (
 	"context"
 	"embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
 	"log/slog"
 	"net"
-	"encoding/json"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -45,13 +46,13 @@ func (s *webserver) handleAbout(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *webserver) handleSiteRedirect(w http.ResponseWriter, r *http.Request) {
-	project := r.PathValue("project")
-	if project == "" {
+func (s *webserver) handleEventRedirect(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("eventID")
+	if eventID == "" {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, "/site/"+project+"/card", http.StatusSeeOther)
+	http.Redirect(w, r, "/event/"+eventID+"/card", http.StatusSeeOther)
 }
 
 func handleError(ctx context.Context, w http.ResponseWriter, err error) {
@@ -65,14 +66,14 @@ func handleError(ctx context.Context, w http.ResponseWriter, err error) {
 	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 }
 
-func (s *webserver) getProjects(ctx context.Context, project string) ([]Project, error) {
+func (s *webserver) getEventProjects(ctx context.Context, eventID string) ([]Project, error) {
 	s.mu.Lock()
-	projects, ok := s.cache[project]
+	projects, ok := s.cache[eventID]
 	s.mu.Unlock()
 
 	if !ok {
 		var err error
-		projects, err = s.d.fetchProjects(ctx, project)
+		projects, err = s.d.fetchProjects(ctx, eventID)
 		if err != nil {
 			return nil, err
 		}
@@ -82,24 +83,24 @@ func (s *webserver) getProjects(ctx context.Context, project string) ([]Project,
 			}
 		}
 		s.mu.Lock()
-		s.cache[project] = projects
+		s.cache[eventID] = projects
 		s.mu.Unlock()
 	}
 	return projects, nil
 }
 
-func (s *webserver) handleSite(w http.ResponseWriter, r *http.Request) {
-	project := r.PathValue("project")
+func (s *webserver) handleEvent(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("eventID")
 	t := r.PathValue("type")
 	switch t {
 	case "3d", "card", "cards", "table":
 	default:
-		http.Redirect(w, r, "/site/"+project+"/card", http.StatusSeeOther)
+		http.Redirect(w, r, "/event/"+eventID+"/card", http.StatusSeeOther)
 		return
 	}
 
 	ctx := r.Context()
-	projects, err := s.getProjects(ctx, project)
+	projects, err := s.getEventProjects(ctx, eventID)
 	if err != nil {
 		handleError(ctx, w, err)
 		return
@@ -122,9 +123,8 @@ func (s *webserver) handleSite(w http.ResponseWriter, r *http.Request) {
 			TeamJSON: string(teamJSON),
 		}
 	}
-
 	data := map[string]any{
-		"Title":    project,
+		"Title":    eventID,
 		"Projects": templateProjects,
 	}
 	if err := templates.Lookup(t+".html").Execute(w, data); err != nil {
@@ -133,10 +133,10 @@ func (s *webserver) handleSite(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *webserver) handleProjectsAPI(w http.ResponseWriter, r *http.Request) {
-	project := r.PathValue("project")
+func (s *webserver) handleEventAPI(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("eventID")
 	ctx := r.Context()
-	projects, err := s.getProjects(ctx, project)
+	projects, err := s.getEventProjects(ctx, eventID)
 	if err != nil {
 		handleError(ctx, w, err)
 		return
@@ -148,17 +148,95 @@ func (s *webserver) handleProjectsAPI(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *webserver) handleProjectAPI(w http.ResponseWriter, r *http.Request) {
+	projectID := r.PathValue("projectID")
+	eventID := r.PathValue("eventID")
+	ctx := r.Context()
+	// This will load from cache.
+	projects, err := s.getEventProjects(ctx, eventID)
+	if err != nil {
+		handleError(ctx, w, err)
+		return
+	}
+	var foundProject *Project
+	for i := range projects {
+		if projects[i].ID == projectID {
+			foundProject = &projects[i]
+			break
+		}
+	}
+	if foundProject == nil {
+		http.Error(w, "Project not found", http.StatusNotFound)
+		return
+	}
+	// Refresh description and tags for the single project
+	if err := s.d.fetchProject(ctx, foundProject); err != nil {
+		handleError(ctx, w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(foundProject); err != nil {
+		slog.ErrorContext(ctx, "web", "err", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+}
+
+func loggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		next.ServeHTTP(w, r)
+		slog.InfoContext(r.Context(), "web", "path", r.URL.Path, "ip", getRealIP(r), "dur", time.Since(start))
+	})
+}
+
+// getRealIP extracts the client's real IP address from an HTTP request,
+// taking into account X-Forwarded-For or other proxy headers.
+func getRealIP(r *http.Request) net.IP {
+	// Check X-Forwarded-For header (most common proxy header)
+	if xForwardedFor := r.Header.Get("X-Forwarded-For"); xForwardedFor != "" { // X-Forwarded-For can contain multiple IPs, the client's IP is the first one
+		ip := net.ParseIP(strings.TrimSpace(strings.Split(xForwardedFor, ",")[0]))
+		if ip != nil {
+			return ip
+		}
+	}
+
+	// Check X-Real-IP header (used by some proxies)
+	if xRealIP := r.Header.Get("X-Real-IP"); xRealIP != "" {
+		if ip := net.ParseIP(xRealIP); ip != nil {
+			return ip
+		}
+	}
+
+	// If no proxy headers found, get the remote address
+	if remoteAddr := r.RemoteAddr; remoteAddr != "" {
+		// RemoteAddr might be in the format IP:port
+		if host, _, err := net.SplitHostPort(remoteAddr); err == nil {
+			if ip := net.ParseIP(host); ip != nil {
+				return ip
+			}
+		} else {
+			// If SplitHostPort fails, try parsing the whole RemoteAddr as an IP
+			if ip := net.ParseIP(remoteAddr); ip != nil {
+				return ip
+			}
+		}
+	}
+	return nil
+}
+
 func runWebserver(ctx context.Context, host string, d *devpostClient) error {
 	w := &webserver{
 		d:     d,
 		cache: map[string][]Project{},
 	}
-	mux := http.ServeMux{}
+	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", w.handleRoot)
 	mux.HandleFunc("GET /about", w.handleAbout)
-	mux.HandleFunc("GET /site/{project}", w.handleSiteRedirect)
-	mux.HandleFunc("GET /site/{project}/{type}", w.handleSite)
-	mux.HandleFunc("GET /api/projects/{project}", w.handleProjectsAPI)
+	mux.HandleFunc("GET /event/{eventID}", w.handleEventRedirect)
+	mux.HandleFunc("GET /event/{eventID}/{type}", w.handleEvent)
+	mux.HandleFunc("GET /api/events/{eventID}", w.handleEventAPI)
+	mux.HandleFunc("GET /api/events/{eventID}/{projectID}", w.handleProjectAPI)
 
 	lc := net.ListenConfig{}
 	ln, err := lc.Listen(ctx, "tcp", host)
@@ -166,7 +244,7 @@ func runWebserver(ctx context.Context, host string, d *devpostClient) error {
 		return err
 	}
 	slog.InfoContext(ctx, "web", "listening", ln.Addr())
-	s := &http.Server{Handler: &mux, ReadHeaderTimeout: 2 * time.Second}
+	s := &http.Server{Handler: loggingMiddleware(mux), ReadHeaderTimeout: 2 * time.Second}
 	errCh := make(chan error)
 	go func() {
 		err2 := s.Serve(ln)

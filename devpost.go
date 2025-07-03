@@ -13,7 +13,9 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"path"
 	"strconv"
+	"time"
 
 	"github.com/maruel/devpostdash/dom"
 	"golang.org/x/net/html"
@@ -89,7 +91,8 @@ type Person struct {
 }
 
 type Project struct {
-	ID            string
+	ID            string // int?
+	ShortName     string
 	Title         string
 	URL           string
 	Tagline       string
@@ -99,15 +102,21 @@ type Project struct {
 	Description   string
 	DescriptionMD string
 	Likes         int
+	Tags          []string
 }
 
-func (d *devpostClient) fetchProjects(ctx context.Context, site string) ([]Project, error) {
+func (d *devpostClient) fetchProjects(ctx context.Context, eventID string) ([]Project, error) {
 	var projects []Project
+	var err error
+	start := time.Now()
+	defer func() {
+		slog.InfoContext(ctx, "devpost", "projects", len(projects), "dur", time.Since(start), "err", err)
+	}()
 	for i := 1; ; i++ {
 		// url := "https://" + d.name + ".devpost.com/project-gallery"
-		url := fmt.Sprintf("https://%s.devpost.com/submissions/search?page=%d&sort=alpha&terms=&utf8=%%E2%%9C%%93", site, i)
-		bod, err := d.get(ctx, url)
-		if err != nil {
+		url := fmt.Sprintf("https://%s.devpost.com/submissions/search?page=%d&sort=alpha&terms=&utf8=%%E2%%9C%%93", eventID, i)
+		var bod []byte
+		if bod, err = d.get(ctx, url); err != nil {
 			return projects, err
 		}
 		// A bit of a hack but good enough.
@@ -117,8 +126,8 @@ func (d *devpostClient) fetchProjects(ctx context.Context, site string) ([]Proje
 		if bytes.Contains(bod, []byte("The hackathon managers haven't published this gallery yet, but hang tight!")) {
 			break
 		}
-		p, err := parseProjects(bytes.NewReader(bod))
-		if err != nil {
+		var p []Project
+		if p, err = parseProjects(bytes.NewReader(bod)); err != nil {
 			return projects, err
 		}
 		if len(p) == 0 {
@@ -126,7 +135,6 @@ func (d *devpostClient) fetchProjects(ctx context.Context, site string) ([]Proje
 		}
 		projects = append(projects, p...)
 	}
-	slog.InfoContext(ctx, "devpost", "projects", len(projects))
 	return projects, nil
 }
 
@@ -152,6 +160,7 @@ func parseProjectNode(n *html.Node) Project {
 	p.ID = dom.NodeAttr(n, "data-software-id")
 	if linkNode := dom.FirstChild(n, dom.Tag("a"), dom.Class("block-wrapper-link")); linkNode != nil {
 		p.URL = dom.NodeAttr(linkNode, "href")
+		p.ShortName = path.Base(p.URL)
 		if imgNode := dom.FirstChild(linkNode, dom.Tag("img"), dom.Class("software_thumbnail_image")); imgNode != nil {
 			p.Image = dom.NodeAttr(imgNode, "src")
 		}
@@ -182,17 +191,27 @@ func parseProjectNode(n *html.Node) Project {
 }
 
 func (d *devpostClient) fetchProject(ctx context.Context, project *Project) error {
-	bod, err := d.get(ctx, project.URL)
-	if err != nil {
+	start := time.Now()
+	var err error
+	defer func() {
+		slog.InfoContext(ctx, "devpost", "project", project.ShortName, "dur", time.Since(start), "err", err)
+	}()
+	var bod []byte
+	if bod, err = d.get(ctx, project.URL); err != nil {
 		return err
 	}
-	doc, err := html.Parse(bytes.NewReader(bod))
-	if err != nil {
+	var doc *html.Node
+	if doc, err = html.Parse(bytes.NewReader(bod)); err != nil {
 		return err
 	}
 	if d := dom.FirstChild(doc, dom.Tag("div"), dom.ID("app-details-left")); d != nil {
 		project.Description = dom.NodeText(d)
 		project.DescriptionMD = dom.NodeMarkdown(d)
+	}
+	if d := dom.FirstChild(doc, dom.Tag("div"), dom.ID("built-with")); d != nil {
+		for c := range dom.YieldChildren(d, dom.Tag("span"), dom.Class("cp-tag")) {
+			project.Tags = append(project.Tags, dom.NodeText(c))
+		}
 	}
 	return nil
 }

@@ -75,10 +75,8 @@
 			img.src = avatarUrl;
 			img.alt = memberName;
 			img.onerror = () => {
-				console.log('Image failed to load, showing fallback.');
 				img.style.display = 'none';
 				this.shadowRoot.querySelector('.avatar-fallback').style.display = 'inline-flex';
-				console.log('done');
 			};
 		}
 	}
