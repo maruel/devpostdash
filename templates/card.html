@@ -92,7 +92,7 @@
 	}
 </style>
 <h1>{{.Title}}</h1>
-<div class="card-carousel">
+<div class="card-carousel" id="projects-container">
   {{range .Projects}}
   <project-card url="{{.URL}}" title="{{.Title}}" {{if .Winner}}winner{{end}} tagline="{{.Tagline}}" likes="{{.Likes}}" team='{{.TeamJSON}}'>
   </project-card>
@@ -102,6 +102,7 @@
   <a href="https://github.com/maruel/devpostdash">github.com/maruel/devpostdash</a>
 </p>
 <script>
+  'use strict';
   document.addEventListener('DOMContentLoaded', () => {
 		const cards = document.querySelectorAll('project-card');
 		let currentIndex = 0;

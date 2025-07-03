@@ -3,19 +3,48 @@
 	'use strict';
 
 	async function fetchProjects(project) {
-		const response = await fetch(`/api/projects/${project}`);
-		const projects = await response.json();
-		return projects;
+		try {
+			const response = await fetch(`/api/projects/${project}`);
+			if (!response.ok) {
+				throw new Error(`HTTP error! status: ${response.status}`);
+			}
+			const projects = await response.json();
+			return projects;
+		} catch (error) {
+			console.error('Error fetching projects:', error);
+			location.reload(); // Full page refresh on error
+		}
 	}
 
 	function renderProjects(projects) {
 		const container = document.getElementById('projects-container');
-		container.innerHTML = ''; // Clear existing content
+		const existingCards = new Map(Array.from(container.children).map(card => [card.getAttribute('url'), card]));
+
 		projects.forEach(project => {
-			const div = document.createElement('div');
-			div.textContent = project.Title; // Adjust this based on your project object structure
-			container.appendChild(div);
+			const card = existingCards.get(project.URL);
+			if (card) {
+				// Update existing card
+				if (card.getAttribute('likes') !== project.Likes.toString()) {
+					card.setAttribute('likes', project.Likes);
+				}
+				existingCards.delete(project.URL);
+			} else {
+				// Add new card
+				const newCard = document.createElement('project-card');
+				newCard.setAttribute('url', project.URL);
+				newCard.setAttribute('title', project.Title);
+				if (project.Winner) {
+					newCard.setAttribute('winner', '');
+				}
+				newCard.setAttribute('tagline', project.Tagline);
+				newCard.setAttribute('likes', project.Likes);
+				newCard.setAttribute('team', JSON.stringify(project.Team));
+				container.appendChild(newCard);
+			}
 		});
+
+		// Remove old cards
+		existingCards.forEach(card => card.remove());
 	}
 
 	window.addEventListener('load', async () => {
@@ -25,6 +54,10 @@
 		if (project) {
 			const projects = await fetchProjects(project);
 			renderProjects(projects);
+			setInterval(async () => {
+				const projects = await fetchProjects(project);
+				renderProjects(projects);
+			}, 30000);
 		}
 	});
 </script>
