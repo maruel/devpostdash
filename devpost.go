@@ -7,6 +7,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -46,6 +48,14 @@ type Project struct {
 	LastRefresh   time.Time `json:"last_refresh"`
 }
 
+func (p *Project) Hash() string {
+	p2 := *p
+	p2.LastRefresh = time.Time{}
+	b, _ := json.Marshal(&p2)
+	h := sha256.Sum256(b)
+	return hex.EncodeToString(h[:16])
+}
+
 type Event struct {
 	ID          string     `json:"id"`
 	Projects    []*Project `json:"projects"`
@@ -53,20 +63,11 @@ type Event struct {
 }
 
 type devpostClient struct {
-	freshness     time.Duration
-	cacheFilePath string
-	c             http.Client
-	header        http.Header
-
-	mu     sync.Mutex
-	events map[string]Event
+	c      http.Client
+	header http.Header
 }
 
-func (d *devpostClient) Close() error {
-	return d.saveCache()
-}
-
-func newDevpostClient(ctx context.Context, h http.RoundTripper, cacheFilePath string) (*devpostClient, error) {
+func newDevpostClient(ctx context.Context, h http.RoundTripper) (*devpostClient, error) {
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		return nil, err
@@ -79,51 +80,14 @@ func newDevpostClient(ctx context.Context, h http.RoundTripper, cacheFilePath st
 			"Referer":    []string{"https://vibe-coding-hackathon.devpost.com/rules"},
 			"User-Agent": []string{"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"},
 		},
-		freshness:     2 * time.Minute,
-		cacheFilePath: cacheFilePath,
-		c:             http.Client{Transport: h, Jar: jar},
-		events:        map[string]Event{},
+		c: http.Client{Transport: h, Jar: jar},
 	}
 	// Load cookies.
 	_, err = out.get(ctx, "https://devpost.com")
 	if err != nil {
 		return nil, err
 	}
-	if err := out.loadCache(); err != nil {
-		slog.ErrorContext(ctx, "devpost", "failed to load cache", err)
-	}
 	return out, nil
-}
-
-type serializedDevpost struct {
-	Version int              `json:"version"`
-	Events  map[string]Event `json:"events"`
-}
-
-func (d *devpostClient) loadCache() error {
-	f, err := os.Open(d.cacheFilePath)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	data := serializedDevpost{}
-	if err := json.NewDecoder(f).Decode(&data); err != nil {
-		return err
-	}
-	d.mu.Lock()
-	d.events = data.Events
-	d.mu.Unlock()
-	return nil
-}
-
-func (d *devpostClient) saveCache() error {
-	f, err := os.Create(d.cacheFilePath)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	data := serializedDevpost{Version: 1, Events: d.events}
-	return json.NewEncoder(f).Encode(&data)
 }
 
 func (d *devpostClient) get(ctx context.Context, url string) ([]byte, error) {
@@ -147,23 +111,11 @@ func (d *devpostClient) get(ctx context.Context, url string) ([]byte, error) {
 }
 
 func (d *devpostClient) fetchProjects(ctx context.Context, eventID string) ([]*Project, error) {
-	d.mu.Lock()
-	e, ok := d.events[eventID]
-	d.mu.Unlock()
-	if ok && time.Since(e.LastRefresh) < d.freshness {
-		return e.Projects, nil
-	}
-
 	var projects []*Project
 	var err error
 	start := time.Now()
 	defer func() {
 		slog.InfoContext(ctx, "devpost", "projects", len(projects), "dur", time.Since(start), "err", err)
-		if err == nil {
-			d.mu.Lock()
-			d.events[eventID] = Event{ID: eventID, Projects: projects, LastRefresh: time.Now()}
-			d.mu.Unlock()
-		}
 	}()
 	for i := 1; ; i++ {
 		// url := "https://" + d.name + ".devpost.com/project-gallery"
@@ -192,9 +144,6 @@ func (d *devpostClient) fetchProjects(ctx context.Context, eventID string) ([]*P
 }
 
 func (d *devpostClient) fetchProject(ctx context.Context, project *Project) error {
-	if time.Since(project.LastRefresh) < d.freshness {
-		return nil
-	}
 	start := time.Now()
 	var err error
 	defer func() {
@@ -220,6 +169,136 @@ func (d *devpostClient) fetchProject(ctx context.Context, project *Project) erro
 	}
 	project.LastRefresh = time.Now()
 	return nil
+}
+
+type cachedDevpostClient struct {
+	d           devpostClientInterface
+	freshness   time.Duration
+	autoRefresh time.Duration
+	cacheFile   string
+
+	mu     sync.Mutex
+	events map[string]Event
+
+	ctx    context.Context
+	cancel context.CancelFunc
+}
+
+func newCachedDevpostClient(parentCtx context.Context, d devpostClientInterface, freshness, autoRefresh time.Duration, cacheFilePath string) (*cachedDevpostClient, error) {
+	ctx, cancel := context.WithCancel(parentCtx)
+	c := &cachedDevpostClient{
+		d:           d,
+		freshness:   freshness,
+		autoRefresh: autoRefresh,
+		cacheFile:   cacheFilePath,
+		events:      map[string]Event{},
+		ctx:         ctx,
+		cancel:      cancel,
+	}
+	if err := c.loadCache(); err != nil {
+		return nil, err
+	}
+	go c.autoRefreshLoop()
+	return c, nil
+}
+
+type serializedDevpost struct {
+	Version int              `json:"version"`
+	Events  map[string]Event `json:"events"`
+}
+
+func (c *cachedDevpostClient) loadCache() error {
+	f, err := os.Open(c.cacheFile)
+	defer slog.InfoContext(c.ctx, "devpost", "msg", "loaded cache", "err", err, "path", c.cacheFile)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	data := serializedDevpost{}
+	if err = json.NewDecoder(f).Decode(&data); err != nil {
+		return err
+	}
+	c.mu.Lock()
+	c.events = data.Events
+	c.mu.Unlock()
+	return nil
+}
+
+func (c *cachedDevpostClient) Close() error {
+	c.cancel()
+	return c.saveCache()
+}
+
+func (c *cachedDevpostClient) saveCache() error {
+	f, err := os.Create(c.cacheFile)
+	defer slog.InfoContext(c.ctx, "devpost", "msg", "saved cache", "err", err)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	c.mu.Lock()
+	data := serializedDevpost{Version: 1, Events: c.events}
+	err = json.NewEncoder(f).Encode(&data)
+	c.mu.Unlock()
+	return err
+}
+
+func (c *cachedDevpostClient) autoRefreshLoop() {
+	ticker := time.NewTicker(c.autoRefresh)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-c.ctx.Done():
+			return
+		case <-ticker.C:
+			var eventIDsToRefresh []string
+			c.mu.Lock()
+			for eventID, event := range c.events {
+				if time.Since(event.LastRefresh) > c.autoRefresh {
+					eventIDsToRefresh = append(eventIDsToRefresh, eventID)
+				}
+			}
+			c.mu.Unlock()
+
+			for _, eventID := range eventIDsToRefresh {
+				slog.InfoContext(c.ctx, "devpost", "msg", "auto-refreshing event", "eventID", eventID)
+				go func(eventID string) {
+					_, err := c.fetchProjects(c.ctx, eventID)
+					if err != nil {
+						slog.ErrorContext(c.ctx, "devpost", "msg", "failed to auto-refresh event", "eventID", eventID, "err", err)
+					}
+				}(eventID)
+			}
+		}
+	}
+}
+
+func (c *cachedDevpostClient) fetchProjects(ctx context.Context, eventID string) ([]*Project, error) {
+	c.mu.Lock()
+	e, ok := c.events[eventID]
+	c.mu.Unlock()
+	if ok && time.Since(e.LastRefresh) < c.freshness {
+		return e.Projects, nil
+	}
+
+	projects, err := c.d.fetchProjects(ctx, eventID)
+	if err == nil {
+		c.mu.Lock()
+		c.events[eventID] = Event{ID: eventID, Projects: projects, LastRefresh: time.Now()}
+		c.mu.Unlock()
+	}
+	return projects, err
+}
+
+func (c *cachedDevpostClient) fetchProject(ctx context.Context, project *Project) error {
+	if time.Since(project.LastRefresh) < c.freshness {
+		return nil
+	}
+	err := c.d.fetchProject(ctx, project)
+	if err == nil {
+		project.LastRefresh = time.Now()
+	}
+	return err
 }
 
 //

@@ -28,8 +28,13 @@ var templatesFS embed.FS
 
 var templates = template.Must(template.ParseFS(templatesFS, "templates/*.html"))
 
+type devpostClientInterface interface {
+	fetchProjects(ctx context.Context, eventID string) ([]*Project, error)
+	fetchProject(ctx context.Context, p *Project) error
+}
+
 type webserver struct {
-	d         *devpostClient
+	d         devpostClientInterface
 	llm       genai.ProviderGen
 	cacheFile string
 
@@ -281,12 +286,13 @@ type serializedWeb struct {
 
 func (s *webserver) loadRoastCache() error {
 	f, err := os.Open(s.cacheFile)
+	defer slog.Info("web", "msg", "loaded cache", "err", err, "path", s.cacheFile)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
 	data := serializedWeb{}
-	if err := json.NewDecoder(f).Decode(&data); err != nil {
+	if err = json.NewDecoder(f).Decode(&data); err != nil {
 		return err
 	}
 	s.mu.Lock()
@@ -297,15 +303,17 @@ func (s *webserver) loadRoastCache() error {
 
 func (s *webserver) saveRoastCache() error {
 	f, err := os.Create(s.cacheFile)
+	defer slog.Info("web", "msg", "saved cache", "err", err)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
 	data := serializedWeb{Version: 1, Roasts: s.roasts}
-	return json.NewEncoder(f).Encode(&data)
+	err = json.NewEncoder(f).Encode(&data)
+	return err
 }
 
-func runWebserver(ctx context.Context, host string, d *devpostClient, c genai.ProviderGen, cacheFile string) error {
+func runWebserver(ctx context.Context, host string, d devpostClientInterface, c genai.ProviderGen, cacheFile string) error {
 	w := &webserver{d: d, llm: c, cacheFile: cacheFile, roasts: map[string]*Roast{}}
 	if err := w.loadRoastCache(); err != nil {
 		slog.ErrorContext(ctx, "web", "failed to load roast cache", err)

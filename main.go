@@ -221,7 +221,11 @@ func mainImpl() error {
 	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
 		return err
 	}
-	d, err := newDevpostClient(ctx, &roundtrippers.Throttle{Transport: h, QPS: 1}, filepath.Join(cacheDir, "devpost.json"))
+	rawDevpostClient, err := newDevpostClient(ctx, &roundtrippers.Throttle{Transport: h, QPS: 1})
+	if err != nil {
+		return err
+	}
+	d, err := newCachedDevpostClient(ctx, rawDevpostClient, 5*time.Minute, 10*time.Minute, filepath.Join(cacheDir, "devpost.json"))
 	if err != nil {
 		return err
 	}
