@@ -15,6 +15,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"os/user"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -206,10 +208,19 @@ func mainImpl() error {
 		defer rr.Stop()
 		h = rr
 	}
-	d, err := newDevpostClient(ctx, &roundtrippers.Throttle{Transport: h, QPS: 1})
+	u, err := user.Current()
 	if err != nil {
 		return err
 	}
+	cacheDir := filepath.Join(u.HomeDir, ".cache", "devpostdash")
+	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
+		return err
+	}
+	d, err := newDevpostClient(ctx, &roundtrippers.Throttle{Transport: h, QPS: 1}, filepath.Join(cacheDir, "cache.json"))
+	if err != nil {
+		return err
+	}
+	defer d.Close()
 
 	if *dump != "" {
 		projects, err := d.fetchProjects(ctx, *dump)
@@ -222,12 +233,12 @@ func mainImpl() error {
 		printProjects(projects)
 		return nil
 	}
-	return runWebserver(ctx, *host, &d)
+	return runWebserver(ctx, *host, d)
 }
 
 func main() {
 	if err := mainImpl(); err != nil {
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
 			fmt.Fprintln(os.Stderr, "devpostdash:", err)
 			os.Exit(1)
 		}

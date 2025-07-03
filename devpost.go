@@ -7,82 +7,22 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"os"
 	"path"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/maruel/devpostdash/dom"
 	"golang.org/x/net/html"
 )
-
-type devpostClient struct {
-	c      http.Client
-	header http.Header
-}
-
-func newDevpostClient(ctx context.Context, h http.RoundTripper) (devpostClient, error) {
-	jar, err := cookiejar.New(nil)
-	if err != nil {
-		return devpostClient{}, err
-	}
-	jar.SetCookies(&url.URL{Scheme: "https", Host: "devpost.com"}, []*http.Cookie{
-		{Name: "platform.notifications.newsletter.dismissed", Value: "dismissed"},
-	})
-	out := devpostClient{
-		header: http.Header{
-			"Referer":    []string{"https://vibe-coding-hackathon.devpost.com/rules"},
-			"User-Agent": []string{"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"},
-		},
-		c: http.Client{Transport: h, Jar: jar},
-	}
-	// Load cookies.
-	_, err = out.get(ctx, "https://devpost.com")
-	return out, err
-}
-
-func (d *devpostClient) refreshDescriptions(ctx context.Context, projects []Project) error {
-	for i := range projects {
-		if err := d.fetchProject(ctx, &projects[i]); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-type httpError struct {
-	StatusCode int
-	Body       []byte
-}
-
-func (e httpError) Error() string {
-	return fmt.Sprintf("status code: %d", e.StatusCode)
-}
-
-func (d *devpostClient) get(ctx context.Context, url string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return nil, err
-	}
-	resp, err := d.c.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	bod, err := io.ReadAll(resp.Body)
-	_ = resp.Body.Close()
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode != 200 {
-		err = &httpError{StatusCode: resp.StatusCode, Body: bod}
-	}
-	return bod, err
-}
 
 type Person struct {
 	Name      string
@@ -106,12 +46,111 @@ type Project struct {
 	LastRefresh   time.Time
 }
 
+type Event struct {
+	ID          string
+	Projects    []Project
+	LastRefresh time.Time
+}
+
+type devpostClient struct {
+	freshness     time.Duration
+	cacheFilePath string
+	c             http.Client
+	header        http.Header
+
+	mu     sync.Mutex
+	events map[string]Event
+}
+
+func (d *devpostClient) Close() error {
+	return d.saveCache()
+}
+
+func newDevpostClient(ctx context.Context, h http.RoundTripper, cacheFilePath string) (*devpostClient, error) {
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		return nil, err
+	}
+	jar.SetCookies(&url.URL{Scheme: "https", Host: "devpost.com"}, []*http.Cookie{
+		{Name: "platform.notifications.newsletter.dismissed", Value: "dismissed"},
+	})
+	out := &devpostClient{
+		header: http.Header{
+			"Referer":    []string{"https://vibe-coding-hackathon.devpost.com/rules"},
+			"User-Agent": []string{"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"},
+		},
+		freshness:     2 * time.Minute,
+		cacheFilePath: cacheFilePath,
+		c:             http.Client{Transport: h, Jar: jar},
+		events:        map[string]Event{},
+	}
+	// Load cookies.
+	_, err = out.get(ctx, "https://devpost.com")
+	if err != nil {
+		return nil, err
+	}
+	if err := out.loadCache(); err != nil {
+		slog.ErrorContext(ctx, "devpost", "failed to load cache", err)
+	}
+	return out, nil
+}
+
+func (d *devpostClient) loadCache() error {
+	f, err := os.Open(d.cacheFilePath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return json.NewDecoder(f).Decode(&d.events)
+}
+
+func (d *devpostClient) saveCache() error {
+	f, err := os.Create(d.cacheFilePath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return json.NewEncoder(f).Encode(d.events)
+}
+
+func (d *devpostClient) get(ctx context.Context, url string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := d.c.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	bod, err := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != 200 {
+		err = &httpError{StatusCode: resp.StatusCode, Body: bod}
+	}
+	return bod, err
+}
+
 func (d *devpostClient) fetchProjects(ctx context.Context, eventID string) ([]Project, error) {
+	d.mu.Lock()
+	e, ok := d.events[eventID]
+	d.mu.Unlock()
+	if ok && time.Since(e.LastRefresh) < d.freshness {
+		return e.Projects, nil
+	}
+
 	var projects []Project
 	var err error
 	start := time.Now()
 	defer func() {
 		slog.InfoContext(ctx, "devpost", "projects", len(projects), "dur", time.Since(start), "err", err)
+		if err == nil {
+			d.mu.Lock()
+			d.events[eventID] = Event{ID: eventID, Projects: projects, LastRefresh: time.Now()}
+			d.mu.Unlock()
+		}
 	}()
 	for i := 1; ; i++ {
 		// url := "https://" + d.name + ".devpost.com/project-gallery"
@@ -138,6 +177,39 @@ func (d *devpostClient) fetchProjects(ctx context.Context, eventID string) ([]Pr
 	}
 	return projects, nil
 }
+
+func (d *devpostClient) fetchProject(ctx context.Context, project *Project) error {
+	if time.Since(project.LastRefresh) < d.freshness {
+		return nil
+	}
+	start := time.Now()
+	var err error
+	defer func() {
+		slog.InfoContext(ctx, "devpost", "project", project.ShortName, "dur", time.Since(start), "err", err)
+	}()
+
+	var bod []byte
+	if bod, err = d.get(ctx, project.URL); err != nil {
+		return err
+	}
+	var doc *html.Node
+	if doc, err = html.Parse(bytes.NewReader(bod)); err != nil {
+		return err
+	}
+	if d := dom.FirstChild(doc, dom.Tag("div"), dom.ID("app-details-left")); d != nil {
+		project.Description = dom.NodeText(d)
+		project.DescriptionMD = dom.NodeMarkdown(d)
+	}
+	if d := dom.FirstChild(doc, dom.Tag("div"), dom.ID("built-with")); d != nil {
+		for c := range dom.YieldChildren(d, dom.Tag("span"), dom.Class("cp-tag")) {
+			project.Tags = append(project.Tags, dom.NodeText(c))
+		}
+	}
+	project.LastRefresh = time.Now()
+	return nil
+}
+
+//
 
 func parseProjects(r io.Reader) ([]Project, error) {
 	doc, err := html.Parse(r)
@@ -191,34 +263,11 @@ func parseProjectNode(n *html.Node) Project {
 	return p
 }
 
-func (d *devpostClient) fetchProject(ctx context.Context, project *Project) error {
-	start := time.Now()
-	var err error
-	defer func() {
-		slog.InfoContext(ctx, "devpost", "project", project.ShortName, "dur", time.Since(start), "err", err)
-	}()
+type httpError struct {
+	StatusCode int
+	Body       []byte
+}
 
-	if time.Since(project.LastRefresh) < 2*time.Minute {
-		return nil
-	}
-
-	var bod []byte
-	if bod, err = d.get(ctx, project.URL); err != nil {
-		return err
-	}
-	var doc *html.Node
-	if doc, err = html.Parse(bytes.NewReader(bod)); err != nil {
-		return err
-	}
-	if d := dom.FirstChild(doc, dom.Tag("div"), dom.ID("app-details-left")); d != nil {
-		project.Description = dom.NodeText(d)
-		project.DescriptionMD = dom.NodeMarkdown(d)
-	}
-	if d := dom.FirstChild(doc, dom.Tag("div"), dom.ID("built-with")); d != nil {
-		for c := range dom.YieldChildren(d, dom.Tag("span"), dom.Class("cp-tag")) {
-			project.Tags = append(project.Tags, dom.NodeText(c))
-		}
-	}
-	project.LastRefresh = time.Now()
-	return nil
+func (e httpError) Error() string {
+	return fmt.Sprintf("status code: %d", e.StatusCode)
 }

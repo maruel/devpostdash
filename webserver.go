@@ -16,7 +16,6 @@ import (
 	"net/http"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -26,9 +25,7 @@ var templatesFS embed.FS
 var templates = template.Must(template.ParseFS(templatesFS, "templates/*.html"))
 
 type webserver struct {
-	d     *devpostClient
-	mu    sync.Mutex
-	cache map[string][]Project
+	d *devpostClient
 }
 
 func (s *webserver) handleRoot(w http.ResponseWriter, r *http.Request) {
@@ -67,29 +64,6 @@ func handleError(ctx context.Context, w http.ResponseWriter, err error) {
 	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 }
 
-func (s *webserver) getEventProjects(ctx context.Context, eventID string) ([]Project, error) {
-	s.mu.Lock()
-	projects, ok := s.cache[eventID]
-	s.mu.Unlock()
-
-	if !ok {
-		var err error
-		projects, err = s.d.fetchProjects(ctx, eventID)
-		if err != nil {
-			return nil, err
-		}
-		if false {
-			if err := s.d.refreshDescriptions(ctx, projects); err != nil {
-				return nil, err
-			}
-		}
-		s.mu.Lock()
-		s.cache[eventID] = projects
-		s.mu.Unlock()
-	}
-	return projects, nil
-}
-
 func (s *webserver) handleEvent(w http.ResponseWriter, r *http.Request) {
 	eventID := r.PathValue("eventID")
 	t := r.PathValue("type")
@@ -101,7 +75,7 @@ func (s *webserver) handleEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	projects, err := s.getEventProjects(ctx, eventID)
+	projects, err := s.d.fetchProjects(ctx, eventID)
 	if err != nil {
 		handleError(ctx, w, err)
 		return
@@ -140,7 +114,7 @@ func (s *webserver) handleEvent(w http.ResponseWriter, r *http.Request) {
 func (s *webserver) handleEventAPI(w http.ResponseWriter, r *http.Request) {
 	eventID := r.PathValue("eventID")
 	ctx := r.Context()
-	projects, err := s.getEventProjects(ctx, eventID)
+	projects, err := s.d.fetchProjects(ctx, eventID)
 	if err != nil {
 		handleError(ctx, w, err)
 		return
@@ -157,7 +131,7 @@ func (s *webserver) handleProjectAPI(w http.ResponseWriter, r *http.Request) {
 	eventID := r.PathValue("eventID")
 	ctx := r.Context()
 	// This will load from cache.
-	projects, err := s.getEventProjects(ctx, eventID)
+	projects, err := s.d.fetchProjects(ctx, eventID)
 	if err != nil {
 		handleError(ctx, w, err)
 		return
@@ -230,10 +204,7 @@ func getRealIP(r *http.Request) net.IP {
 }
 
 func runWebserver(ctx context.Context, host string, d *devpostClient) error {
-	w := &webserver{
-		d:     d,
-		cache: map[string][]Project{},
-	}
+	w := &webserver{d: d}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", w.handleRoot)
 	mux.HandleFunc("GET /about", w.handleAbout)
