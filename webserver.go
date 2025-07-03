@@ -12,6 +12,7 @@ import (
 	"html/template"
 	"log/slog"
 	"net"
+	"encoding/json"
 	"net/http"
 	"sync"
 	"time"
@@ -64,6 +65,29 @@ func handleError(ctx context.Context, w http.ResponseWriter, err error) {
 	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 }
 
+func (s *webserver) getProjects(ctx context.Context, project string) ([]Project, error) {
+	s.mu.Lock()
+	projects, ok := s.cache[project]
+	s.mu.Unlock()
+
+	if !ok {
+		var err error
+		projects, err = s.d.fetchProjects(ctx, project)
+		if err != nil {
+			return nil, err
+		}
+		if false {
+			if err := s.d.refreshDescriptions(ctx, projects); err != nil {
+				return nil, err
+			}
+		}
+		s.mu.Lock()
+		s.cache[project] = projects
+		s.mu.Unlock()
+	}
+	return projects, nil
+}
+
 func (s *webserver) handleSite(w http.ResponseWriter, r *http.Request) {
 	project := r.PathValue("project")
 	t := r.PathValue("type")
@@ -74,33 +98,32 @@ func (s *webserver) handleSite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.mu.Lock()
-	projects, ok := s.cache[project]
-	s.mu.Unlock()
-
 	ctx := r.Context()
-	if !ok {
-		var err error
-		projects, err = s.d.fetchProjects(ctx, project)
-		if err != nil {
-			handleError(ctx, w, err)
-			return
-		}
-		if false {
-			if err := s.d.refreshDescriptions(ctx, projects); err != nil {
-				handleError(ctx, w, err)
-				return
-			}
-		}
-		s.mu.Lock()
-		s.cache[project] = projects
-		s.mu.Unlock()
+	projects, err := s.getProjects(ctx, project)
+	if err != nil {
+		handleError(ctx, w, err)
+		return
 	}
 	data := map[string]any{
 		"Title":    project,
 		"Projects": projects,
 	}
 	if err := templates.Lookup(t+".html").Execute(w, data); err != nil {
+		slog.ErrorContext(ctx, "web", "err", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+}
+
+func (s *webserver) handleProjectsAPI(w http.ResponseWriter, r *http.Request) {
+	project := r.PathValue("project")
+	ctx := r.Context()
+	projects, err := s.getProjects(ctx, project)
+	if err != nil {
+		handleError(ctx, w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(projects); err != nil {
 		slog.ErrorContext(ctx, "web", "err", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
@@ -116,6 +139,7 @@ func runWebserver(ctx context.Context, host string, d *devpostClient) error {
 	mux.HandleFunc("GET /about", w.handleAbout)
 	mux.HandleFunc("GET /site/{project}", w.handleSiteRedirect)
 	mux.HandleFunc("GET /site/{project}/{type}", w.handleSite)
+	mux.HandleFunc("GET /api/projects/{project}", w.handleProjectsAPI)
 
 	lc := net.ListenConfig{}
 	ln, err := lc.Listen(ctx, "tcp", host)

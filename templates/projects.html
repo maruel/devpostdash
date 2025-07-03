@@ -1,4 +1,32 @@
 {{/* This file will contain the shared code to update the data */}}
 <script>
 	'use strict';
+
+	async function fetchProjects(project) {
+		const response = await fetch(`/api/projects/${project}`);
+		const projects = await response.json();
+		return projects;
+	}
+
+	function renderProjects(projects) {
+		const container = document.getElementById('projects-container');
+		container.innerHTML = ''; // Clear existing content
+		projects.forEach(project => {
+			const div = document.createElement('div');
+			div.textContent = project.Title; // Adjust this based on your project object structure
+			container.appendChild(div);
+		});
+	}
+
+	window.addEventListener('load', async () => {
+		// Assuming 'project' is available globally or can be extracted from the URL
+		const pathParts = window.location.pathname.split('/');
+		const project = pathParts[pathParts.indexOf('site') + 1];
+		if (project) {
+			const projects = await fetchProjects(project);
+			renderProjects(projects);
+		}
+	});
 </script>
+
+<div id="projects-container">Loading projects...</div>
