@@ -1,0 +1,153 @@
+<template id="project-card-template">
+  <style>
+    :host {
+			display: block;
+			background: #ffffff;
+			border-radius: 12px;
+			box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+			padding: 25px;
+			width: calc(33% - 25px);
+			box-sizing: border-box;
+			display: flex;
+			flex-direction: column;
+			justify-content: space-between;
+			transition: transform 0.3s ease, box-shadow 0.3s ease;
+		}
+
+		:host(:hover) {
+			transform: translateY(-8px);
+			box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+		}
+
+		h2 {
+			margin-top: 0;
+			margin-bottom: 10px;
+			font-size: 1.6em;
+			color: #34495e;
+		}
+
+		h2 a {
+			text-decoration: none;
+			color: #007bff;
+			transition: color 0.2s ease;
+		}
+
+		h2 a:hover {
+			color: #0056b3;
+		}
+
+		.tagline {
+			font-style: italic;
+			color: #7f8c8d;
+			margin-bottom: 15px;
+			font-size: 0.95em;
+		}
+
+		.team-avatars {
+			display: flex;
+			align-items: center;
+			flex-wrap: wrap;
+			margin-top: 15px;
+			margin-bottom: 15px;
+		}
+
+		.team-avatars img {
+			border-radius: 50%;
+			width: 45px;
+			height: 45px;
+			margin-right: 8px;
+			border: 3px solid #ecf0f1;
+			box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+		}
+
+		.team-member {
+			display: flex;
+			align-items: center;
+			margin-right: 15px;
+			margin-bottom: 10px;
+			background-color: rgba(255, 255, 255, 0.1);
+			padding: 5px 10px;
+			border-radius: 20px;
+			transition: background-color 0.3s;
+		}
+
+		.team-member:hover {
+			background-color: rgba(255, 255, 255, 0.2);
+		}
+
+		.team-member span {
+			color: #34495e;
+			font-size: 0.9em;
+			font-weight: 500;
+			margin-left: 10px;
+		}
+
+		.likes {
+			font-weight: bold;
+			color: #e74c3c;
+			font-size: 1.1em;
+			display: flex;
+			align-items: center;
+			justify-content: flex-end;
+			margin-top: auto;
+		}
+
+		.likes::before {
+			content: '❤️';
+			margin-right: 5px;
+		}
+  </style>
+  <h2>
+    <a href="">
+      <slot name="title"></slot>
+    </a>
+    <span class="winner"></span>
+  </h2>
+  <p class="tagline">
+    <slot name="tagline"></slot>
+  </p>
+  <div class="team-avatars"></div>
+  <div class="likes">
+    <slot name="likes"></slot>
+  </div>
+</template>
+<script>
+  class ProjectCard extends HTMLElement {
+		constructor() {
+			super();
+			this.attachShadow({mode: 'open'});
+			const template = document.getElementById('project-card-template').content;
+			this.shadowRoot.appendChild(template.cloneNode(true));
+		}
+
+		connectedCallback() {
+			this.shadowRoot.querySelector('h2 a').href = this.getAttribute('url');
+			this.shadowRoot.querySelector('slot[name="title"]').innerHTML = this.getAttribute('title');
+			if (this.hasAttribute('winner')) {
+				this.shadowRoot.querySelector('.winner').textContent = ' 🏆';
+			}
+			this.shadowRoot.querySelector('slot[name="tagline"]').innerHTML = this.getAttribute('tagline');
+			this.shadowRoot.querySelector('slot[name="likes"]').innerHTML = this.getAttribute('likes');
+			const team = JSON.parse(this.getAttribute('team') || '[]');
+			const avatarsContainer = this.shadowRoot.querySelector('.team-avatars');
+			team.forEach(member => {
+				const memberLink = document.createElement('a');
+				memberLink.href = member.URL;
+				const memberDiv = document.createElement('div');
+				memberDiv.className = 'team-member';
+				const img = document.createElement('img');
+				img.src = member.AvatarURL;
+				img.alt = member.Name;
+				img.title = member.Name;
+				const nameSpan = document.createElement('span');
+				nameSpan.textContent = member.Name;
+				memberDiv.appendChild(img);
+				memberDiv.appendChild(nameSpan);
+				memberLink.appendChild(memberDiv);
+				avatarsContainer.appendChild(memberLink);
+			});
+		}
+	}
+
+	customElements.define('project-card', ProjectCard);
+</script>

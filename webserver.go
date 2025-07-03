@@ -104,9 +104,28 @@ func (s *webserver) handleSite(w http.ResponseWriter, r *http.Request) {
 		handleError(ctx, w, err)
 		return
 	}
+
+	// projectData is a superset of Project.
+	type projectData struct {
+		Project
+		TeamJSON string
+	}
+	templateProjects := make([]projectData, len(projects))
+	for i, p := range projects {
+		teamJSON, err := json.Marshal(p.Team)
+		if err != nil {
+			handleError(ctx, w, err)
+			return
+		}
+		templateProjects[i] = projectData{
+			Project:  p,
+			TeamJSON: string(teamJSON),
+		}
+	}
+
 	data := map[string]any{
 		"Title":    project,
-		"Projects": projects,
+		"Projects": templateProjects,
 	}
 	if err := templates.Lookup(t+".html").Execute(w, data); err != nil {
 		slog.ErrorContext(ctx, "web", "err", err)

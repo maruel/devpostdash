@@ -1,7 +1,7 @@
 {{template "partial_header.html" .}}
 <title>{{.Title}}</title>
 <style>
-	body {
+  body {
 		font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 		margin: 0;
 		padding: 0;
@@ -30,118 +30,33 @@
 		align-items: center;
 	}
 
-	.project-card {
+	project-card {
 		position: absolute;
 		width: 400px;
 		height: 70vh;
 		max-height: 500px;
-		background: linear-gradient(120deg, #f8fafc 0%, #e0e7ff 100%);
-		color: #ecf0f1;
-		border-radius: 12px;
-		box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
-		padding: 25px;
-		box-sizing: border-box;
-		display: flex;
-		flex-direction: column;
-		justify-content: space-between;
 		transition: transform 0.8s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.8s;
 		transform-style: preserve-3d;
 		opacity: 0;
 		transform: translateZ(-200px) rotateY(0deg);
 	}
 
-	.project-card.active {
+	project-card.active {
 		opacity: 1;
 		transform: translateZ(0) rotateY(0deg);
 		z-index: 10;
 	}
 
-	.project-card.next {
+	project-card.next {
 		opacity: 0.5;
 		transform: translateX(50%) translateZ(-100px) rotateY(-45deg);
 		z-index: 5;
 	}
 
-	.project-card.prev {
+	project-card.prev {
 		opacity: 0.5;
 		transform: translateX(-50%) translateZ(-100px) rotateY(45deg);
 		z-index: 5;
-	}
-
-	.project-card h2 {
-		margin-top: 0;
-		margin-bottom: 10px;
-		font-size: 1.6em;
-		color: #ecf0f1;
-	}
-
-	.project-card h2 a {
-		text-decoration: none;
-		color: #007bff;
-		transition: color 0.2s ease;
-	}
-
-	.project-card h2 a:hover {
-		color: #5dade2;
-	}
-
-	.project-card .tagline {
-		font-style: italic;
-		color: #7f8c8d;
-		margin-bottom: 15px;
-		font-size: 0.95em;
-	}
-
-	.project-card .team-members {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		margin-top: 15px;
-		margin-bottom: 15px;
-	}
-
-	.project-card .team-member {
-		display: flex;
-		align-items: center;
-		margin-right: 15px;
-		margin-bottom: 10px;
-		background-color: rgba(255, 255, 255, 0.1);
-		padding: 5px 10px;
-		border-radius: 20px;
-		transition: background-color 0.3s;
-	}
-
-	.project-card .team-member:hover {
-		background-color: rgba(255, 255, 255, 0.2);
-	}
-
-	.project-card .team-member img {
-		border-radius: 50%;
-		width: 35px;
-		height: 35px;
-		margin-right: 10px;
-		border: 2px solid #ecf0f1;
-	}
-
-	.project-card .team-member span {
-		color: #34495e;
-		font-size: 0.9em;
-		font-weight: 500;
-	}
-
-	.project-card .likes {
-		font-weight: bold;
-		color: #e74c3c;
-		font-size: 1.1em;
-		display: flex;
-		align-items: center;
-		justify-content: flex-end;
-		margin-top: auto;
-	}
-
-	.project-card .likes::before {
-		content: '❤️';
-		margin-right: 5px;
 	}
 
 	.github-link {
@@ -163,51 +78,32 @@
 	}
 
 	@media screen and (orientation: portrait) {
-		.project-card {
+		project-card {
 			width: 80vw;
 		}
 
-		.project-card.next {
+		project-card.next {
 			transform: translateX(30%) translateZ(-100px) rotateY(-45deg);
 		}
 
-		.project-card.prev {
+		project-card.prev {
 			transform: translateX(-30%) translateZ(-100px) rotateY(45deg);
 		}
 	}
 </style>
-
 <h1>{{.Title}}</h1>
-
 <div class="card-carousel">
-	{{range .Projects}}
-	<div class="project-card">
-		<h2>
-			<a href="{{.URL}}">{{.Title}}</a>{{if .Winner}} 🏆{{end}}
-		</h2>
-		<p class="tagline">{{.Tagline}}</p>
-		<div class="team-members">
-			{{range .Team}}
-			<a href="{{.URL}}">
-				<div class="team-member">
-					<img src="{{.AvatarURL}}" alt="{{.Name}}" title="{{.Name}}" />
-					<span>{{.Name}}</span>
-				</div>
-			</a>
-			{{end}}
-		</div>
-		<div class="likes">{{.Likes}}</div>
-	</div>
-	{{end}}
+  {{range .Projects}}
+  <project-card url="{{.URL}}" title="{{.Title}}" {{if .Winner}}winner{{end}} tagline="{{.Tagline}}" likes="{{.Likes}}" team='{{.TeamJSON}}'>
+  </project-card>
+  {{end}}
 </div>
-
 <p class="github-link">
-	<a href="https://github.com/maruel/devpostdash">github.com/maruel/devpostdash</a>
+  <a href="https://github.com/maruel/devpostdash">github.com/maruel/devpostdash</a>
 </p>
-
 <script>
-	document.addEventListener('DOMContentLoaded', () => {
-		const cards = document.querySelectorAll('.project-card');
+  document.addEventListener('DOMContentLoaded', () => {
+		const cards = document.querySelectorAll('project-card');
 		let currentIndex = 0;
 		let autoRotateInterval;
 
@@ -247,16 +143,12 @@
 				elem.requestFullscreen();
 			} else if (elem.webkitRequestFullscreen) { // Safari
 				elem.webkitRequestFullscreen();
-			} else if (elem.msRequestFullscreen) { // IE11
-				elem.msRequestFullscreen();
 			}
 		}
 
-		// Initial setup
 		if (cards.length > 0) {
 			updateCards();
 			resetAutoRotate();
-			// Added this to go fullscreen.
 			document.body.addEventListener('click', requestFullscreen, {once: true});
 		}
 
@@ -307,5 +199,5 @@
 		}
 	});
 </script>
-
 {{template "partial_projects.html" .}}
+{{template "project-card.html" .}}

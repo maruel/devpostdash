@@ -1,7 +1,7 @@
 {{template "partial_header.html" .}}
 <title>{{.Title}}</title>
 <style>
-	body {
+  body {
 		font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 		margin: 0;
 		padding: 20px;
@@ -27,80 +27,6 @@
 		margin: 0 auto;
 	}
 
-	.project-card {
-		background-color: #ffffff;
-		border-radius: 12px;
-		box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
-		padding: 25px;
-		width: calc(33% - 25px);
-		box-sizing: border-box;
-		display: flex;
-		flex-direction: column;
-		justify-content: space-between;
-		transition: transform 0.3s ease, box-shadow 0.3s ease;
-	}
-
-	.project-card:hover {
-		transform: translateY(-8px);
-		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
-	}
-
-	.project-card h2 {
-		margin-top: 0;
-		margin-bottom: 10px;
-		font-size: 1.6em;
-		color: #34495e;
-	}
-
-	.project-card h2 a {
-		text-decoration: none;
-		color: #007bff;
-		transition: color 0.2s ease;
-	}
-
-	.project-card h2 a:hover {
-		color: #0056b3;
-	}
-
-	.project-card .tagline {
-		font-style: italic;
-		color: #7f8c8d;
-		margin-bottom: 15px;
-		font-size: 0.95em;
-	}
-
-	.project-card .team-avatars {
-		display: flex;
-		align-items: center;
-		margin-top: 15px;
-		margin-bottom: 15px;
-	}
-
-	.project-card .team-avatars img {
-		border-radius: 50%;
-		width: 45px;
-		height: 45px;
-		margin-right: 8px;
-		border: 3px solid #ecf0f1;
-		box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-	}
-
-	.project-card .likes {
-		font-weight: bold;
-		color: #e74c3c;
-		font-size: 1.1em;
-		display: flex;
-		align-items: center;
-		justify-content: flex-end;
-		margin-top: auto;
-		/* Pushes likes to the bottom */
-	}
-
-	.project-card .likes::before {
-		content: '❤️';
-		margin-right: 5px;
-	}
-
 	.github-link {
 		text-align: center;
 		margin-top: 40px;
@@ -121,13 +47,13 @@
 
 	/* Responsive adjustments */
 	@media (max-width: 1024px) {
-		.project-card {
+		project-card {
 			width: calc(50% - 25px);
 		}
 	}
 
 	@media (max-width: 768px) {
-		.project-card {
+		project-card {
 			width: calc(100% - 25px);
 		}
 
@@ -136,28 +62,15 @@
 		}
 	}
 </style>
-
 <h1>{{.Title}}</h1>
-
 <div class="project-container">
-	{{range .Projects}}
-	<div class="project-card">
-		<h2>
-			<a href="{{.URL}}">{{.Title}}</a>{{if .Winner}} 🏆{{end}}
-		</h2>
-		<p class="tagline">{{.Tagline}}</p>
-		<div class="team-avatars">
-			{{range .Team}}
-			<img src="{{.AvatarURL}}" alt="{{.Name}}" title="{{.Name}}" />
-			{{end}}
-		</div>
-		<div class="likes">{{.Likes}}</div>
-	</div>
-	{{end}}
+  {{range .Projects}}
+  <project-card url="{{.URL}}" title="{{.Title}}" {{if .Winner}}winner{{end}} tagline="{{.Tagline}}" likes="{{.Likes}}" team='{{.TeamJSON}}'>
+  </project-card>
+  {{end}}
 </div>
-
 <p class="github-link">
-	<a href="https://github.com/maruel/devpostdash">github.com/maruel/devpostdash</a>
+  <a href="https://github.com/maruel/devpostdash">github.com/maruel/devpostdash</a>
 </p>
-
 {{template "partial_projects.html" .}}
+{{template "project-card.html" .}}
