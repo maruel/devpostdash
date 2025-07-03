@@ -91,20 +91,20 @@
   </style>
   <h2>
     <a href="">
-      <slot name="title"></slot>
+      <span id="title-content"></span>
     </a>
     <span class="winner"></span>
   </h2>
   <p class="tagline">
-    <slot name="tagline"></slot>
+    <span id="tagline-content"></span>
   </p>
   <div class="team-avatars"></div>
   <p class="description">
-    <slot name="description"></slot>
+    <span id="description-content"></span>
   </p>
   <div class="tags"></div>
   <div class="likes">
-    <slot name="likes"></slot>
+    <span id="likes-content"></span>
   </div>
 </template>
 <script>
@@ -133,18 +133,20 @@
 
 		_render() {
 			this.shadowRoot.querySelector('h2 a').href = this.getAttribute('url') || '';
-			this.shadowRoot.querySelector('slot[name="title"]').innerHTML = this.getAttribute('title') || '';
+			this.shadowRoot.querySelector('#title-content').textContent = this.getAttribute('title') || '';
 			const winnerSpan = this.shadowRoot.querySelector('.winner');
 			if (this.hasAttribute('winner')) {
 				winnerSpan.textContent = ' 🏆';
 			} else {
 				winnerSpan.textContent = '';
 			}
-			this.shadowRoot.querySelector('slot[name="tagline"]').innerHTML = this.getAttribute('tagline') || '';
-			this.shadowRoot.querySelector('slot[name="likes"]').innerHTML = this.getAttribute('likes') || '';
+			this.shadowRoot.querySelector('#tagline-content').textContent = this.getAttribute('tagline') || '';
+			this.shadowRoot.querySelector('#likes-content').textContent = this.getAttribute('likes') || '';
 
 			const avatarsContainer = this.shadowRoot.querySelector('.team-avatars');
-			avatarsContainer.innerHTML = ''; // Clear existing avatars
+			while (avatarsContainer.firstChild) {
+				avatarsContainer.removeChild(avatarsContainer.firstChild);
+			} // Clear existing avatars
 			try {
 				const team = JSON.parse(this.getAttribute('team') || '[]');
 				team.forEach(member => {
@@ -158,11 +160,13 @@
 				console.error('Error parsing team attribute:', e);
 			}
 
-			// TODO:
-			// this.shadowRoot.querySelector('slot[name="description"]').innerHTML = this.getAttribute('description') || '';
+			// Do not show the description for now because it is too long.
+			// this.shadowRoot.querySelector('#description-content').textContent = this.getAttribute('description') || '';
 
 			const tagsContainer = this.shadowRoot.querySelector('.tags');
-			tagsContainer.innerHTML = ''; // Clear existing tags
+			while (tagsContainer.firstChild) {
+				tagsContainer.removeChild(tagsContainer.firstChild);
+			} // Clear existing tags
 			try {
 				const tags = JSON.parse(this.getAttribute('tags') || '[]');
 				tags.forEach(tag => {

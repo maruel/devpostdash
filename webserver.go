@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -123,6 +124,9 @@ func (s *webserver) handleEvent(w http.ResponseWriter, r *http.Request) {
 			TeamJSON: string(teamJSON),
 		}
 	}
+	sort.Slice(templateProjects, func(i, j int) bool {
+		return templateProjects[i].Likes > templateProjects[j].Likes
+	})
 	data := map[string]any{
 		"Title":    eventID,
 		"Projects": templateProjects,

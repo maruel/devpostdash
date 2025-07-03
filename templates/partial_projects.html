@@ -65,9 +65,9 @@
 				if (card.getAttribute('likes') !== project.Likes.toString()) {
 					card.setAttribute('likes', project.Likes);
 				}
-				card.setAttribute('team', JSON.stringify(project.Team));
-				card.setAttribute('description', JSON.stringify(project.Description));
-				card.setAttribute('tags', JSON.stringify(project.Tags));
+				card.setAttribute('team', JSON.stringify(project.Team || []));
+				card.setAttribute('description', JSON.stringify(project.Description || ''));
+				card.setAttribute('tags', JSON.stringify(project.Tags || []));
 			}
 		}));
 	}

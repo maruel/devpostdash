@@ -103,6 +103,7 @@ type Project struct {
 	DescriptionMD string
 	Likes         int
 	Tags          []string
+	LastRefresh   time.Time
 }
 
 func (d *devpostClient) fetchProjects(ctx context.Context, eventID string) ([]Project, error) {
@@ -196,6 +197,11 @@ func (d *devpostClient) fetchProject(ctx context.Context, project *Project) erro
 	defer func() {
 		slog.InfoContext(ctx, "devpost", "project", project.ShortName, "dur", time.Since(start), "err", err)
 	}()
+
+	if time.Since(project.LastRefresh) < 2*time.Minute {
+		return nil
+	}
+
 	var bod []byte
 	if bod, err = d.get(ctx, project.URL); err != nil {
 		return err
@@ -213,5 +219,6 @@ func (d *devpostClient) fetchProject(ctx context.Context, project *Project) erro
 			project.Tags = append(project.Tags, dom.NodeText(c))
 		}
 	}
+	project.LastRefresh = time.Now()
 	return nil
 }

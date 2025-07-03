@@ -218,7 +218,7 @@ func mainImpl() error {
 
 func main() {
 	if err := mainImpl(); err != nil {
-		if err != context.Canceled && err != context.DeadlineExceeded {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			fmt.Fprintln(os.Stderr, "devpostdash:", err)
 			os.Exit(1)
 		}
