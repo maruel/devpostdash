@@ -44,6 +44,7 @@
 		// Remove old cards
 		existingCards.forEach(card => card.remove());
 		await renderProjectDetails(projects, eventID);
+		document.dispatchEvent(new CustomEvent('projectsRendered', { detail: projects }));
 	}
 
 	async function renderProjectDetails(projects, eventID) {

@@ -45,6 +45,20 @@
 	td:last-child {
 		text-align: center;
 	}
+
+	.tags {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+	}
+
+	.cp-tag {
+		background-color: #e0e0e0;
+		color: #333;
+		padding: 5px 10px;
+		border-radius: 5px;
+		font-size: 0.8em;
+	}
 </style>
 <h1>{{.Title}}</h1>
 <table border="1">
@@ -54,6 +68,7 @@
       <th>Tagline</th>
       <th>Team</th>
       <th>❤️</th>
+      <th>Tags</th>
     </tr>
   </thead>
   <tbody>
@@ -67,6 +82,7 @@
         {{end}}
       </td>
       <td>{{.Likes}}</td>
+      <td>{{range $i, $tag := .Tags}}{{if $i}}, {{end}}{{$tag}}{{end}}</td>
     </tr>
     {{end}}
   </tbody>
@@ -74,5 +90,72 @@
 <p style="text-align: center; margin-top: 20px;">
   <a href="https://github.com/maruel/devpostdash">github.com/maruel/devpostdash</a>
 </p>
+<script>
+  function sortTableByLikes() {
+		const tableBody = document.querySelector('table tbody');
+		const rows = Array.from(tableBody.querySelectorAll('tr'));
+		rows.sort((a, b) => {
+			const likesA = parseInt(a.children[3].textContent || '0', 10);
+			const likesB = parseInt(b.children[3].textContent || '0', 10);
+			return likesB - likesA; // Sort in descending order
+		});
+		rows.forEach(row => tableBody.appendChild(row));
+	}
+
+	document.addEventListener('DOMContentLoaded', sortTableByLikes);
+	document.addEventListener('projectsRendered', (event) => {
+		const projectsData = event.detail;
+		const tableBody = document.querySelector('table tbody');
+		// Clear existing rows
+		tableBody.innerHTML = '';
+		// Create and append new rows
+		projectsData.forEach(project => {
+			const row = document.createElement('tr');
+			const titleCell = document.createElement('td');
+			const titleLink = document.createElement('a');
+			titleLink.href = project.URL;
+			titleLink.textContent = project.Title;
+			titleCell.appendChild(titleLink);
+			if (project.Winner) {
+				titleCell.innerHTML += ' 🏆';
+			}
+			row.appendChild(titleCell);
+			const taglineCell = document.createElement('td');
+			taglineCell.textContent = project.Tagline;
+			row.appendChild(taglineCell);
+			const teamCell = document.createElement('td');
+			if (project.Team) {
+				project.Team.forEach(member => {
+					const teamMember = document.createElement('team-member');
+					teamMember.setAttribute('avatar-url', member.AvatarURL);
+					teamMember.setAttribute('member-name', member.Name);
+					teamMember.setAttribute('member-url', member.URL);
+					teamCell.appendChild(teamMember);
+				});
+			}
+			row.appendChild(teamCell);
+			const likesCell = document.createElement('td');
+			likesCell.textContent = project.Likes;
+			row.appendChild(likesCell);
+			const tagsCell = document.createElement('td');
+			const tagsContainer = document.createElement('div');
+			tagsContainer.classList.add('tags');
+			if (project.Tags) {
+				project.Tags.forEach(tag => {
+					const tagSpan = document.createElement('span');
+					tagSpan.textContent = tag;
+					tagSpan.classList.add('cp-tag');
+					tagsContainer.appendChild(tagSpan);
+				});
+			}
+			tagsCell.appendChild(tagsContainer);
+			row.appendChild(tagsCell);
+			tableBody.appendChild(row);
+		});
+
+		// Now sort the newly rendered rows
+		sortTableByLikes();
+	});
+</script>
 {{template "partial_projects.html" .}}
 {{template "team-member.html" .}}

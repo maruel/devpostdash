@@ -159,7 +159,16 @@ func mainImpl() error {
 				if t == 0 {
 					skip = true
 				} else {
-					a.Value = slog.DurationValue(t.Round(time.Millisecond))
+					if t < 10*time.Millisecond {
+						t = t.Round(time.Microsecond)
+					} else if t < 10*time.Second {
+						t = t.Round(time.Millisecond)
+					} else if t < 10*time.Minute {
+						t = t.Round(time.Second)
+					} else if t < 10*time.Hour {
+						t = t.Round(time.Minute)
+					}
+					a.Value = slog.DurationValue(t)
 				}
 			case nil:
 				skip = true

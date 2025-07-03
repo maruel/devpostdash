@@ -265,7 +265,7 @@ func runWebserver(ctx context.Context, host string, d *devpostClient) error {
 		err := s.Shutdown(shutdownCtx)
 		shutdownCancel()
 		if err != nil {
-			return fmt.Errorf("server shutdown failed: %w", err)
+			return err
 		}
 		return <-errCh
 	case err := <-errCh:
