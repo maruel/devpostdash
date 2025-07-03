@@ -113,35 +113,35 @@
 			const row = document.createElement('tr');
 			const titleCell = document.createElement('td');
 			const titleLink = document.createElement('a');
-			titleLink.href = project.URL;
-			titleLink.textContent = project.Title;
+			titleLink.href = project.url;
+			titleLink.textContent = project.title;
 			titleCell.appendChild(titleLink);
-			if (project.Winner) {
+			if (project.winner) {
 				titleCell.innerHTML += ' 🏆';
 			}
 			row.appendChild(titleCell);
 			const taglineCell = document.createElement('td');
-			taglineCell.textContent = project.Tagline;
+			taglineCell.textContent = project.tagline;
 			row.appendChild(taglineCell);
 			const teamCell = document.createElement('td');
-			if (project.Team) {
-				project.Team.forEach(member => {
+			if (project.team) {
+				project.team.forEach(member => {
 					const teamMember = document.createElement('team-member');
-					teamMember.setAttribute('avatar-url', member.AvatarURL);
-					teamMember.setAttribute('member-name', member.Name);
-					teamMember.setAttribute('member-url', member.URL);
+					teamMember.setAttribute('avatar-url', member.avatar_url);
+					teamMember.setAttribute('member-name', member.name);
+					teamMember.setAttribute('member-url', member.url);
 					teamCell.appendChild(teamMember);
 				});
 			}
 			row.appendChild(teamCell);
 			const likesCell = document.createElement('td');
-			likesCell.textContent = project.Likes;
+			likesCell.textContent = project.likes;
 			row.appendChild(likesCell);
 			const tagsCell = document.createElement('td');
 			const tagsContainer = document.createElement('div');
 			tagsContainer.classList.add('tags');
-			if (project.Tags) {
-				project.Tags.forEach(tag => {
+			if (project.tags) {
+				project.tags.forEach(tag => {
 					const tagSpan = document.createElement('span');
 					tagSpan.textContent = tag;
 					tagSpan.classList.add('cp-tag');

@@ -23,24 +23,24 @@
 
 		// First pass: Create/update cards based on project IDs (initial rendering)
 		projects.forEach((project) => {
-			let card = existingCards.get(project.URL);
+			let card = existingCards.get(project.url);
 			if (!card) {
 				card = document.createElement('project-card');
-				card.setAttribute('project-id', project.ID);
-				card.setAttribute('url', project.URL);
+				card.setAttribute('project-id', project.id);
+				card.setAttribute('url', project.url);
 				container.appendChild(card);
 			} else {
-				existingCards.delete(project.URL);
+				existingCards.delete(project.url);
 			}
-			card.setAttribute('title', project.Title);
-			if (project.Winner) {
+			card.setAttribute('title', project.title);
+			if (project.winner) {
 				card.setAttribute('winner', '');
 			}
-			card.setAttribute('tagline', project.Tagline);
-			if (card.getAttribute('likes') !== project.Likes.toString()) {
-				card.setAttribute('likes', project.Likes);
+			card.setAttribute('tagline', project.tagline);
+			if (card.getAttribute('likes') !== project.likes.toString()) {
+				card.setAttribute('likes', project.likes);
 			}
-			card.setAttribute('team', JSON.stringify(project.Team));
+			card.setAttribute('team', JSON.stringify(project.team));
 		});
 		// Remove old cards
 		existingCards.forEach(card => card.remove());
@@ -51,24 +51,24 @@
 	async function renderProjectDetails(projects, eventID) {
 		// Second pass: Fetch detailed information and update existing cards
 		await Promise.all(projects.map(async (key) => {
-			const detailResponse = await fetch(`/api/events/${eventID}/${key.ID}`);
+			const detailResponse = await fetch(`/api/events/${eventID}/${key.id}`);
 			if (!detailResponse.ok) {
-				console.error(`HTTP error! status: ${detailResponse.status} for project ID: ${key.ID}`);
+				console.error(`HTTP error! status: ${detailResponse.status} for project id: ${key.id}`);
 				return null;
 			}
 			const project = await detailResponse.json();
-			const card = document.querySelector(`project-card[url="${project.URL}"]`);
+			const card = document.querySelector(`project-card[url="${project.url}"]`);
 			if (card) {
-				card.setAttribute('title', project.Title);
-				if (project.Winner) {
+				card.setAttribute('title', project.title);
+				if (project.winner) {
 					card.setAttribute('winner', '');
 				}
-				card.setAttribute('tagline', project.Tagline);
-				if (card.getAttribute('likes') !== project.Likes.toString()) {
-					card.setAttribute('likes', project.Likes);
+				card.setAttribute('tagline', project.tagline);
+				if (card.getAttribute('likes') !== project.likes.toString()) {
+					card.setAttribute('likes', project.likes);
 				}
-				card.setAttribute('team', JSON.stringify(project.Team || []));
-				card.setAttribute('description', JSON.stringify(project.Description || ''));
+				card.setAttribute('team', JSON.stringify(project.team || []));
+				card.setAttribute('description', JSON.stringify(project.description || ''));
 				card.setAttribute('tags', JSON.stringify(project.Tags || []));
 			}
 		}));

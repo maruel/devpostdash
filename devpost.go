@@ -25,31 +25,31 @@ import (
 )
 
 type Person struct {
-	Name      string
-	URL       string
-	AvatarURL string
+	Name      string `json:"name"`
+	URL       string `json:"url"`
+	AvatarURL string `json:"avatar_url"`
 }
 
 type Project struct {
-	ID            string // int?
-	ShortName     string
-	Title         string
-	URL           string
-	Tagline       string
-	Image         string
-	Winner        bool
-	Team          []Person
-	Description   string
-	DescriptionMD string
-	Likes         int
-	Tags          []string
-	LastRefresh   time.Time
+	ID            string    `json:"id"`
+	ShortName     string    `json:"short_name"`
+	Title         string    `json:"title"`
+	URL           string    `json:"url"`
+	Tagline       string    `json:"tagline"`
+	Image         string    `json:"image"`
+	Winner        bool      `json:"winner"`
+	Team          []Person  `json:"team"`
+	Description   string    `json:"description"`
+	DescriptionMD string    `json:"description_md"`
+	Likes         int       `json:"likes"`
+	Tags          []string  `json:"tags"`
+	LastRefresh   time.Time `json:"last_refresh"`
 }
 
 type Event struct {
-	ID          string
-	Projects    []*Project
-	LastRefresh time.Time
+	ID          string     `json:"id"`
+	Projects    []*Project `json:"projects"`
+	LastRefresh time.Time  `json:"last_refresh"`
 }
 
 type devpostClient struct {
@@ -95,13 +95,25 @@ func newDevpostClient(ctx context.Context, h http.RoundTripper, cacheFilePath st
 	return out, nil
 }
 
+type serializedDevpost struct {
+	Version int              `json:"version"`
+	Events  map[string]Event `json:"events"`
+}
+
 func (d *devpostClient) loadCache() error {
 	f, err := os.Open(d.cacheFilePath)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-	return json.NewDecoder(f).Decode(&d.events)
+	data := serializedDevpost{}
+	if err := json.NewDecoder(f).Decode(&data); err != nil {
+		return err
+	}
+	d.mu.Lock()
+	d.events = data.Events
+	d.mu.Unlock()
+	return nil
 }
 
 func (d *devpostClient) saveCache() error {
@@ -110,7 +122,8 @@ func (d *devpostClient) saveCache() error {
 		return err
 	}
 	defer f.Close()
-	return json.NewEncoder(f).Encode(d.events)
+	data := serializedDevpost{Version: 1, Events: d.events}
+	return json.NewEncoder(f).Encode(&data)
 }
 
 func (d *devpostClient) get(ctx context.Context, url string) ([]byte, error) {

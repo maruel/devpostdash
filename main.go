@@ -115,7 +115,7 @@ func watchExecutable(ctx context.Context, cancel context.CancelFunc) error {
 				}
 				// Detect writes or chmod events which may indicate a modification
 				if event.Has(fsnotify.Write) || event.Has(fsnotify.Chmod) {
-					slog.InfoContext(ctx, "citygpt", "msg", "Executable file was modified, initiating shutdown...")
+					slog.InfoContext(ctx, "devpostdash", "msg", "Executable file was modified, initiating shutdown...")
 					cancel()
 					return
 				}
@@ -123,7 +123,7 @@ func watchExecutable(ctx context.Context, cancel context.CancelFunc) error {
 				if !ok {
 					return
 				}
-				slog.WarnContext(ctx, "citygpt", "msg", "Error watching executable", "err", err)
+				slog.WarnContext(ctx, "devpostdash", "msg", "Error watching executable", "err", err)
 			case <-ctx.Done():
 				return
 			}
@@ -221,7 +221,7 @@ func mainImpl() error {
 	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
 		return err
 	}
-	d, err := newDevpostClient(ctx, &roundtrippers.Throttle{Transport: h, QPS: 1}, filepath.Join(cacheDir, "cache.json"))
+	d, err := newDevpostClient(ctx, &roundtrippers.Throttle{Transport: h, QPS: 1}, filepath.Join(cacheDir, "devpost.json"))
 	if err != nil {
 		return err
 	}
@@ -254,7 +254,7 @@ func mainImpl() error {
 			return fmt.Errorf("%T does not implement genai.ProviderGen", *provider)
 		}
 	}
-	return runWebserver(ctx, *host, d, c)
+	return runWebserver(ctx, *host, d, c, filepath.Join(cacheDir, "webserver.json"))
 }
 
 func main() {

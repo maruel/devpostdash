@@ -172,9 +172,9 @@
 				const team = JSON.parse(this.getAttribute('team') || '[]');
 				team.forEach(member => {
 					const teamMember = document.createElement('team-member');
-					teamMember.setAttribute('avatar-url', member.AvatarURL);
-					teamMember.setAttribute('member-name', member.Name);
-					teamMember.setAttribute('member-url', member.URL);
+					teamMember.setAttribute('avatar-url', member.avatar_url);
+					teamMember.setAttribute('member-name', member.name);
+					teamMember.setAttribute('member-url', member.url);
 					avatarsContainer.appendChild(teamMember);
 				});
 			} catch (e) {
