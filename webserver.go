@@ -14,13 +14,9 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"os"
 	"sort"
 	"strings"
-	"sync"
 	"time"
-
-	"github.com/maruel/genai"
 )
 
 //go:embed templates/*.html
@@ -28,23 +24,9 @@ var templatesFS embed.FS
 
 var templates = template.Must(template.ParseFS(templatesFS, "templates/*.html"))
 
-type devpostClientInterface interface {
-	fetchProjects(ctx context.Context, eventID string) ([]*Project, error)
-	fetchProject(ctx context.Context, p *Project) error
-}
-
 type webserver struct {
-	d         devpostClientInterface
-	llm       genai.ProviderGen
-	cacheFile string
-
-	mu     sync.Mutex
-	roasts map[string]*Roast
-}
-
-type Roast struct {
-	Content     string    `json:"content"`
-	LastRefresh time.Time `json:"last_refresh"`
+	d devpostClientInterface
+	r *roaster
 }
 
 func (s *webserver) handleRoot(w http.ResponseWriter, r *http.Request) {
@@ -157,56 +139,27 @@ func (s *webserver) apiProject(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *webserver) apiRoast(w http.ResponseWriter, r *http.Request) {
-	var req struct {
+	var roastReq struct {
 		EventID   string `json:"event_id"`
 		ProjectID string `json:"project_id"`
 	}
 	ctx := r.Context()
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&roastReq); err != nil {
 		handleError(ctx, w, &httpError{StatusCode: http.StatusBadRequest, Body: []byte(err.Error())})
 		return
 	}
-	s.mu.Lock()
-	roast := s.roasts[req.ProjectID]
-	s.mu.Unlock()
-
-	if roast == nil {
-		p, err := s.getProject(ctx, req.EventID, req.ProjectID)
-		if err != nil {
-			handleError(ctx, w, err)
-			return
-		}
-
-		teamNames := make([]string, len(p.Team))
-		for i, p := range p.Team {
-			teamNames[i] = p.Name
-		}
-
-		prompt := fmt.Sprintf(
-			"Roast the following project. Be funny and concise. Reply with only one hard hitting sentence, nothing else.\nProject name: %s\nTag line: %s\nTeam members: %s\nTags: %s\nWhole Description:\n%s",
-			p.Title,
-			p.Tagline,
-			strings.Join(teamNames, ", "),
-			strings.Join(p.Tags, ", "),
-			p.Description)
-		msgs := genai.Messages{genai.NewTextMessage(genai.User, prompt)}
-		resp, err := s.llm.GenSync(ctx, msgs, &genai.OptionsText{Temperature: 1.0})
-		if err != nil {
-			handleError(ctx, w, err)
-			return
-		}
-		roast = &Roast{Content: resp.AsText(), LastRefresh: time.Now()}
-		if roast.Content == "" {
-			handleError(ctx, w, errors.New("no content generated"))
-			return
-		}
-		slog.InfoContext(ctx, "roast", "content", roast)
-		s.mu.Lock()
-		s.roasts[req.ProjectID] = roast
-		s.mu.Unlock()
+	p, err := s.getProject(ctx, roastReq.EventID, roastReq.ProjectID)
+	if err != nil {
+		handleError(ctx, w, err)
+		return
+	}
+	roast, err := s.r.doRoast(ctx, p)
+	if err != nil {
+		handleError(ctx, w, err)
+		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(map[string]string{"content": roast.Content}); err != nil {
+	if err := json.NewEncoder(w).Encode(map[string]string{"content": roast}); err != nil {
 		handleError(ctx, w, err)
 	}
 }
@@ -279,50 +232,8 @@ func getRealIP(r *http.Request) net.IP {
 	return nil
 }
 
-type serializedWeb struct {
-	Version int               `json:"version"`
-	Roasts  map[string]*Roast `json:"roasts"`
-}
-
-func (s *webserver) loadRoastCache() error {
-	f, err := os.Open(s.cacheFile)
-	defer slog.Info("web", "msg", "loaded cache", "err", err, "path", s.cacheFile)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	data := serializedWeb{}
-	if err = json.NewDecoder(f).Decode(&data); err != nil {
-		return err
-	}
-	s.mu.Lock()
-	s.roasts = data.Roasts
-	s.mu.Unlock()
-	return nil
-}
-
-func (s *webserver) saveRoastCache() error {
-	f, err := os.Create(s.cacheFile)
-	defer slog.Info("web", "msg", "saved cache", "err", err)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	data := serializedWeb{Version: 1, Roasts: s.roasts}
-	err = json.NewEncoder(f).Encode(&data)
-	return err
-}
-
-func runWebserver(ctx context.Context, host string, d devpostClientInterface, c genai.ProviderGen, cacheFile string) error {
-	w := &webserver{d: d, llm: c, cacheFile: cacheFile, roasts: map[string]*Roast{}}
-	if err := w.loadRoastCache(); err != nil {
-		slog.ErrorContext(ctx, "web", "failed to load roast cache", err)
-	}
-	defer func() {
-		if err := w.saveRoastCache(); err != nil {
-			slog.ErrorContext(ctx, "web", "failed to save roast cache", err)
-		}
-	}()
+func runWebserver(ctx context.Context, host string, d devpostClientInterface, r *roaster) error {
+	w := &webserver{d: d, r: r}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", w.handleRoot)

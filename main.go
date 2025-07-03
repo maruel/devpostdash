@@ -258,7 +258,12 @@ func mainImpl() error {
 			return fmt.Errorf("%T does not implement genai.ProviderGen", *provider)
 		}
 	}
-	return runWebserver(ctx, *host, d, c, filepath.Join(cacheDir, "webserver.json"))
+	r, err := newRoaster(c, filepath.Join(cacheDir, "roaster.json"))
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+	return runWebserver(ctx, *host, d, r)
 }
 
 func main() {

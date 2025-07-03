@@ -62,6 +62,11 @@ type Event struct {
 	LastRefresh time.Time  `json:"last_refresh"`
 }
 
+type devpostClientInterface interface {
+	fetchProjects(ctx context.Context, eventID string) ([]*Project, error)
+	fetchProject(ctx context.Context, p *Project) error
+}
+
 type devpostClient struct {
 	c      http.Client
 	header http.Header
@@ -202,15 +207,13 @@ func newCachedDevpostClient(parentCtx context.Context, d devpostClientInterface,
 	return c, nil
 }
 
-type serializedDevpost struct {
-	Version int              `json:"version"`
-	Events  map[string]Event `json:"events"`
-}
-
 func (c *cachedDevpostClient) loadCache() error {
 	f, err := os.Open(c.cacheFile)
 	defer slog.InfoContext(c.ctx, "devpost", "msg", "loaded cache", "err", err, "path", c.cacheFile)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
 		return err
 	}
 	defer f.Close()
@@ -302,6 +305,11 @@ func (c *cachedDevpostClient) fetchProject(ctx context.Context, project *Project
 }
 
 //
+
+type serializedDevpost struct {
+	Version int              `json:"version"`
+	Events  map[string]Event `json:"events"`
+}
 
 func parseProjects(r io.Reader) ([]*Project, error) {
 	doc, err := html.Parse(r)
