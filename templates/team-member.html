@@ -1,0 +1,87 @@
+<template id="team-member-template">
+	<style>
+		.team-member {
+			display: flex;
+			align-items: center;
+			margin-right: 15px;
+			margin-bottom: 10px;
+			background-color: rgba(255, 255, 255, 0.1);
+			padding: 5px 10px;
+			border-radius: 20px;
+			transition: background-color 0.3s;
+		}
+
+		.team-member:hover {
+			background-color: rgba(0, 255, 255, 0.2);
+		}
+
+		.team-member img {
+			border-radius: 50%;
+			width: 45px;
+			height: 45px;
+			margin-right: 8px;
+			border: 3px solid #ecf0f1;
+			box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+		}
+
+		.team-member .avatar-fallback {
+			display: none;
+			/* Hidden by default, shown on error */
+			border-radius: 50%;
+			width: 45px;
+			height: 45px;
+			margin-right: 8px;
+			border: 3px solid #ecf0f1;
+			box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+
+			font-size: 45px;
+			background-color: #ecf0f1;
+			align-items: center;
+			justify-content: center;
+		}
+
+		.team-member-name {
+			color: #34495e;
+			font-size: 0.9em;
+			font-weight: 500;
+			margin-left: 10px;
+		}
+	</style>
+	<a class="team-member-link" href="" target="_blank" rel="noopener noreferrer">
+		<div class="team-member">
+			<img src="" alt="" />
+			<span class="avatar-fallback">🤖</span>
+			<span class="team-member-name"></span>
+		</div>
+	</a>
+</template>
+
+<script>
+	class TeamMember extends HTMLElement {
+		constructor() {
+			super();
+			this.attachShadow({mode: 'open'});
+			const template = document.getElementById('team-member-template').content;
+			this.shadowRoot.appendChild(template.cloneNode(true));
+		}
+
+		connectedCallback() {
+			const avatarUrl = this.getAttribute('avatar-url');
+			const memberName = this.getAttribute('member-name');
+			const memberUrl = this.getAttribute('member-url');
+			this.shadowRoot.querySelector('.team-member-name').textContent = memberName;
+			this.shadowRoot.querySelector('.team-member-link').href = memberUrl;
+			const img = this.shadowRoot.querySelector('img');
+			img.src = avatarUrl;
+			img.alt = memberName;
+			img.onerror = () => {
+				console.log('Image failed to load, showing fallback.');
+				img.style.display = 'none';
+				this.shadowRoot.querySelector('.avatar-fallback').style.display = 'inline-flex';
+				console.log('done');
+			};
+		}
+	}
+
+	customElements.define('team-member', TeamMember);
+</script>

@@ -58,24 +58,6 @@
 		z-index: 5;
 	}
 
-	.github-link {
-		text-align: center;
-		margin-top: 20px;
-		font-size: 1.1em;
-	}
-
-	.github-link a {
-		color: #3498db;
-		text-decoration: none;
-		font-weight: 500;
-		transition: color 0.2s ease;
-	}
-
-	.github-link a:hover {
-		color: #5dade2;
-		text-decoration: underline;
-	}
-
 	@media screen and (orientation: portrait) {
 		project-card {
 			width: 80vw;
@@ -90,16 +72,12 @@
 		}
 	}
 </style>
-<h1>{{.Title}}</h1>
 <div class="card-carousel" id="projects-container">
   {{range .Projects}}
   <project-card url="{{.URL}}" title="{{.Title}}" {{if .Winner}}winner{{end}} tagline="{{.Tagline}}" likes="{{.Likes}}" team='{{.TeamJSON}}'>
   </project-card>
   {{end}}
 </div>
-<p class="github-link">
-  <a href="https://github.com/maruel/devpostdash">github.com/maruel/devpostdash</a>
-</p>
 <script>
   'use strict';
 	document.addEventListener('DOMContentLoaded', () => {

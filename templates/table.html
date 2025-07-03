@@ -1,7 +1,7 @@
 {{template "partial_header.html" .}}
 <title>{{.Title}}</title>
 <style>
-	body {
+  body {
 		margin: 20px;
 		background-color: #f4f4f4;
 		color: #333;
@@ -42,45 +42,37 @@
 		background-color: #f1f1f1;
 	}
 
-	img {
-		border-radius: 50%;
-		margin-right: 5px;
-		border: 2px solid #ddd;
-		vertical-align: middle;
-	}
-
 	td:last-child {
 		text-align: center;
 	}
 </style>
-
 <h1>{{.Title}}</h1>
 <table border="1">
-	<thead>
-		<tr>
-			<th>Title</th>
-			<th>Tagline</th>
-			<th>Team</th>
-			<th>❤️</th>
-		</tr>
-	</thead>
-	<tbody>
-		{{range .Projects}}
-		<tr>
-			<td><a href="{{.URL}}">{{.Title}}</a>{{if .Winner}} 🏆{{end}}</td>
-			<td>{{.Tagline}}</td>
-			<td>
-				{{range .Team}}
-				<img src="{{.AvatarURL}}" width="50" height="50" />
-				{{end}}
-			</td>
-			<td>{{.Likes}}</td>
-		</tr>
-		{{end}}
-	</tbody>
+  <thead>
+    <tr>
+      <th>Title</th>
+      <th>Tagline</th>
+      <th>Team</th>
+      <th>❤️</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{range .Projects}}
+    <tr>
+      <td><a href="{{.URL}}">{{.Title}}</a>{{if .Winner}} 🏆{{end}}</td>
+      <td>{{.Tagline}}</td>
+      <td>
+        {{range .Team}}
+        <team-member avatar-url="{{.AvatarURL}}" member-name="{{.Name}}" member-url="{{.URL}}"></team-member>
+        {{end}}
+      </td>
+      <td>{{.Likes}}</td>
+    </tr>
+    {{end}}
+  </tbody>
 </table>
 <p style="text-align: center; margin-top: 20px;">
-	<a href="https://github.com/maruel/devpostdash">github.com/maruel/devpostdash</a>
+  <a href="https://github.com/maruel/devpostdash">github.com/maruel/devpostdash</a>
 </p>
-
 {{template "partial_projects.html" .}}
+{{template "team-member.html" .}}

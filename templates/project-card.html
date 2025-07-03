@@ -51,37 +51,6 @@
 			margin-bottom: 15px;
 		}
 
-		.team-avatars img {
-			border-radius: 50%;
-			width: 45px;
-			height: 45px;
-			margin-right: 8px;
-			border: 3px solid #ecf0f1;
-			box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-		}
-
-		.team-member {
-			display: flex;
-			align-items: center;
-			margin-right: 15px;
-			margin-bottom: 10px;
-			background-color: rgba(255, 255, 255, 0.1);
-			padding: 5px 10px;
-			border-radius: 20px;
-			transition: background-color 0.3s;
-		}
-
-		.team-member:hover {
-			background-color: rgba(255, 255, 255, 0.2);
-		}
-
-		.team-member span {
-			color: #34495e;
-			font-size: 0.9em;
-			font-weight: 500;
-			margin-left: 10px;
-		}
-
 		.likes {
 			font-weight: bold;
 			color: #e74c3c;
@@ -132,23 +101,15 @@
 			const team = JSON.parse(this.getAttribute('team') || '[]');
 			const avatarsContainer = this.shadowRoot.querySelector('.team-avatars');
 			team.forEach(member => {
-				const memberLink = document.createElement('a');
-				memberLink.href = member.URL;
-				const memberDiv = document.createElement('div');
-				memberDiv.className = 'team-member';
-				const img = document.createElement('img');
-				img.src = member.AvatarURL;
-				img.alt = member.Name;
-				img.title = member.Name;
-				const nameSpan = document.createElement('span');
-				nameSpan.textContent = member.Name;
-				memberDiv.appendChild(img);
-				memberDiv.appendChild(nameSpan);
-				memberLink.appendChild(memberDiv);
-				avatarsContainer.appendChild(memberLink);
+				const teamMember = document.createElement('team-member');
+				teamMember.setAttribute('avatar-url', member.AvatarURL);
+				teamMember.setAttribute('member-name', member.Name);
+				teamMember.setAttribute('member-url', member.URL);
+				avatarsContainer.appendChild(teamMember);
 			});
 		}
 	}
 
 	customElements.define('project-card', ProjectCard);
 </script>
+{{template "team-member.html" .}}
