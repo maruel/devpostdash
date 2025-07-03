@@ -1,324 +1,311 @@
 <!DOCTYPE html>
-{{/*
-Copyright 2025 Marc-Antoine Ruel. All rights reserved.
-Use of this source code is governed under the Apache License, Version 2.0
-that can be found in the LICENSE file.
-*/}}
-<html>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+<title>{{.Title}}</title>
+<style>
+	body {
+		font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+		margin: 0;
+		padding: 0;
+		background-color: #1a2533;
+		color: #ecf0f1;
+		line-height: 1.6;
+		overflow: hidden;
+		/* Hide body scrollbars */
+	}
 
-<head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
-	<title>{{.Title}}</title>
-	<style>
-		body {
-			font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-			margin: 0;
-			padding: 0;
-			background-color: #1a2533;
-			color: #ecf0f1;
-			line-height: 1.6;
-			overflow: hidden;
-			/* Hide body scrollbars */
-		}
+	h1 {
+		color: #ecf0f1;
+		text-align: center;
+		margin-bottom: 20px;
+		font-size: 2.5em;
+		font-weight: 600;
+	}
 
-		h1 {
-			color: #ecf0f1;
-			text-align: center;
-			margin-bottom: 20px;
-			font-size: 2.5em;
-			font-weight: 600;
-		}
+	.card-carousel {
+		position: relative;
+		width: 100vw;
+		height: 80vh;
+		perspective: 1000px;
+		display: flex;
+		justify-content: center;
+		align-items: center;
+	}
 
-		.card-carousel {
-			position: relative;
-			width: 100vw;
-			height: 80vh;
-			perspective: 1000px;
-			display: flex;
-			justify-content: center;
-			align-items: center;
-		}
+	.project-card {
+		position: absolute;
+		width: 400px;
+		height: 70vh;
+		max-height: 500px;
+		background: linear-gradient(120deg, #f8fafc 0%, #e0e7ff 100%);
+		color: #ecf0f1;
+		border-radius: 12px;
+		box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+		padding: 25px;
+		box-sizing: border-box;
+		display: flex;
+		flex-direction: column;
+		justify-content: space-between;
+		transition: transform 0.8s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.8s;
+		transform-style: preserve-3d;
+		opacity: 0;
+		transform: translateZ(-200px) rotateY(0deg);
+	}
 
+	.project-card.active {
+		opacity: 1;
+		transform: translateZ(0) rotateY(0deg);
+		z-index: 10;
+	}
+
+	.project-card.next {
+		opacity: 0.5;
+		transform: translateX(50%) translateZ(-100px) rotateY(-45deg);
+		z-index: 5;
+	}
+
+	.project-card.prev {
+		opacity: 0.5;
+		transform: translateX(-50%) translateZ(-100px) rotateY(45deg);
+		z-index: 5;
+	}
+
+	.project-card h2 {
+		margin-top: 0;
+		margin-bottom: 10px;
+		font-size: 1.6em;
+		color: #ecf0f1;
+	}
+
+	.project-card h2 a {
+		text-decoration: none;
+		color: #007bff;
+		transition: color 0.2s ease;
+	}
+
+	.project-card h2 a:hover {
+		color: #5dade2;
+	}
+
+	.project-card .tagline {
+		font-style: italic;
+		color: #7f8c8d;
+		margin-bottom: 15px;
+		font-size: 0.95em;
+	}
+
+	.project-card .team-members {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		margin-top: 15px;
+		margin-bottom: 15px;
+	}
+
+	.project-card .team-member {
+		display: flex;
+		align-items: center;
+		margin-right: 15px;
+		margin-bottom: 10px;
+		background-color: rgba(255, 255, 255, 0.1);
+		padding: 5px 10px;
+		border-radius: 20px;
+		transition: background-color 0.3s;
+	}
+
+	.project-card .team-member:hover {
+		background-color: rgba(255, 255, 255, 0.2);
+	}
+
+	.project-card .team-member img {
+		border-radius: 50%;
+		width: 35px;
+		height: 35px;
+		margin-right: 10px;
+		border: 2px solid #ecf0f1;
+	}
+
+	.project-card .team-member span {
+		color: #34495e;
+		font-size: 0.9em;
+		font-weight: 500;
+	}
+
+	.project-card .likes {
+		font-weight: bold;
+		color: #e74c3c;
+		font-size: 1.1em;
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		margin-top: auto;
+	}
+
+	.project-card .likes::before {
+		content: '❤️';
+		margin-right: 5px;
+	}
+
+	.github-link {
+		text-align: center;
+		margin-top: 20px;
+		font-size: 1.1em;
+	}
+
+	.github-link a {
+		color: #3498db;
+		text-decoration: none;
+		font-weight: 500;
+		transition: color 0.2s ease;
+	}
+
+	.github-link a:hover {
+		color: #5dade2;
+		text-decoration: underline;
+	}
+
+	@media screen and (orientation: portrait) {
 		.project-card {
-			position: absolute;
-			width: 400px;
-			height: 70vh;
-			max-height: 500px;
-			background: linear-gradient(120deg, #f8fafc 0%, #e0e7ff 100%);
-			color: #ecf0f1;
-			border-radius: 12px;
-			box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
-			padding: 25px;
-			box-sizing: border-box;
-			display: flex;
-			flex-direction: column;
-			justify-content: space-between;
-			transition: transform 0.8s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.8s;
-			transform-style: preserve-3d;
-			opacity: 0;
-			transform: translateZ(-200px) rotateY(0deg);
-		}
-
-		.project-card.active {
-			opacity: 1;
-			transform: translateZ(0) rotateY(0deg);
-			z-index: 10;
+			width: 80vw;
 		}
 
 		.project-card.next {
-			opacity: 0.5;
-			transform: translateX(50%) translateZ(-100px) rotateY(-45deg);
-			z-index: 5;
+			transform: translateX(30%) translateZ(-100px) rotateY(-45deg);
 		}
 
 		.project-card.prev {
-			opacity: 0.5;
-			transform: translateX(-50%) translateZ(-100px) rotateY(45deg);
-			z-index: 5;
+			transform: translateX(-30%) translateZ(-100px) rotateY(45deg);
 		}
+	}
+</style>
 
-		.project-card h2 {
-			margin-top: 0;
-			margin-bottom: 10px;
-			font-size: 1.6em;
-			color: #ecf0f1;
-		}
+<h1>{{.Title}}</h1>
 
-		.project-card h2 a {
-			text-decoration: none;
-			color: #007bff;
-			transition: color 0.2s ease;
-		}
-
-		.project-card h2 a:hover {
-			color: #5dade2;
-		}
-
-		.project-card .tagline {
-			font-style: italic;
-			color: #7f8c8d;
-			margin-bottom: 15px;
-			font-size: 0.95em;
-		}
-
-		.project-card .team-members {
-			display: flex;
-			flex-wrap: wrap;
-			align-items: center;
-			margin-top: 15px;
-			margin-bottom: 15px;
-		}
-
-		.project-card .team-member {
-			display: flex;
-			align-items: center;
-			margin-right: 15px;
-			margin-bottom: 10px;
-			background-color: rgba(255, 255, 255, 0.1);
-			padding: 5px 10px;
-			border-radius: 20px;
-			transition: background-color 0.3s;
-		}
-
-		.project-card .team-member:hover {
-			background-color: rgba(255, 255, 255, 0.2);
-		}
-
-		.project-card .team-member img {
-			border-radius: 50%;
-			width: 35px;
-			height: 35px;
-			margin-right: 10px;
-			border: 2px solid #ecf0f1;
-		}
-
-		.project-card .team-member span {
-			color: #34495e;
-			font-size: 0.9em;
-			font-weight: 500;
-		}
-
-		.project-card .likes {
-			font-weight: bold;
-			color: #e74c3c;
-			font-size: 1.1em;
-			display: flex;
-			align-items: center;
-			justify-content: flex-end;
-			margin-top: auto;
-		}
-
-		.project-card .likes::before {
-			content: '❤️';
-			margin-right: 5px;
-		}
-
-		.github-link {
-			text-align: center;
-			margin-top: 20px;
-			font-size: 1.1em;
-		}
-
-		.github-link a {
-			color: #3498db;
-			text-decoration: none;
-			font-weight: 500;
-			transition: color 0.2s ease;
-		}
-
-		.github-link a:hover {
-			color: #5dade2;
-			text-decoration: underline;
-		}
-
-		@media screen and (orientation: portrait) {
-			.project-card {
-				width: 80vw;
-			}
-
-			.project-card.next {
-				transform: translateX(30%) translateZ(-100px) rotateY(-45deg);
-			}
-
-			.project-card.prev {
-				transform: translateX(-30%) translateZ(-100px) rotateY(45deg);
-			}
-		}
-	</style>
-</head>
-
-<body>
-	<h1>{{.Title}}</h1>
-
-	<div class="card-carousel">
-		{{range .Projects}}
-		<div class="project-card">
-			<h2>
-				<a href="{{.URL}}">{{.Title}}</a>{{if .Winner}} 🏆{{end}}
-			</h2>
-			<p class="tagline">{{.Tagline}}</p>
-			<div class="team-members">
-				{{range .Team}}
-				<a href="{{.URL}}">
-					<div class="team-member">
-						<img src="{{.AvatarURL}}" alt="{{.Name}}" title="{{.Name}}" />
-						<span>{{.Name}}</span>
-					</div>
-				</a>
-				{{end}}
-			</div>
-			<div class="likes">{{.Likes}}</div>
+<div class="card-carousel">
+	{{range .Projects}}
+	<div class="project-card">
+		<h2>
+			<a href="{{.URL}}">{{.Title}}</a>{{if .Winner}} 🏆{{end}}
+		</h2>
+		<p class="tagline">{{.Tagline}}</p>
+		<div class="team-members">
+			{{range .Team}}
+			<a href="{{.URL}}">
+				<div class="team-member">
+					<img src="{{.AvatarURL}}" alt="{{.Name}}" title="{{.Name}}" />
+					<span>{{.Name}}</span>
+				</div>
+			</a>
+			{{end}}
 		</div>
-		{{end}}
+		<div class="likes">{{.Likes}}</div>
 	</div>
+	{{end}}
+</div>
 
-	<p class="github-link">
-		<a href="https://github.com/maruel/devpostdash">github.com/maruel/devpostdash</a>
-	</p>
+<p class="github-link">
+	<a href="https://github.com/maruel/devpostdash">github.com/maruel/devpostdash</a>
+</p>
 
-	<script>
-		document.addEventListener('DOMContentLoaded', () => {
-			const cards = document.querySelectorAll('.project-card');
-			let currentIndex = 0;
-			let autoRotateInterval;
+<script>
+	document.addEventListener('DOMContentLoaded', () => {
+		const cards = document.querySelectorAll('.project-card');
+		let currentIndex = 0;
+		let autoRotateInterval;
 
-			function updateCards() {
-				cards.forEach((card, index) => {
-					card.classList.remove('active', 'prev', 'next');
-					if (index === currentIndex) {
-						card.classList.add('active');
-					} else if (index === (currentIndex + 1) % cards.length) {
-						card.classList.add('next');
-					} else if (index === (currentIndex - 1 + cards.length) % cards.length) {
-						card.classList.add('prev');
-					}
-				});
-			}
-
-			function resetAutoRotate() {
-				clearInterval(autoRotateInterval);
-				autoRotateInterval = setInterval(showNext, 10000); // 10 seconds
-			}
-
-			function showNext() {
-				currentIndex = (currentIndex + 1) % cards.length;
-				updateCards();
-				resetAutoRotate();
-			}
-
-			function showPrev() {
-				currentIndex = (currentIndex - 1 + cards.length) % cards.length;
-				updateCards();
-				resetAutoRotate();
-			}
-
-			function requestFullscreen() {
-				const elem = document.documentElement;
-				if (elem.requestFullscreen) {
-					elem.requestFullscreen();
-				} else if (elem.webkitRequestFullscreen) { // Safari
-					elem.webkitRequestFullscreen();
-				} else if (elem.msRequestFullscreen) { // IE11
-					elem.msRequestFullscreen();
-				}
-			}
-
-			// Initial setup
-			if (cards.length > 0) {
-				updateCards();
-				resetAutoRotate();
-				// Added this to go fullscreen.
-				document.body.addEventListener('click', requestFullscreen, {once: true});
-			}
-
-			// Scroll handling
-			let scrollTimeout;
-			window.addEventListener('wheel', (event) => {
-				if (window.innerWidth - event.clientX < 200) { // Detect scroll on the right side
-					event.preventDefault();
-					clearTimeout(scrollTimeout);
-					scrollTimeout = setTimeout(() => {
-						if (event.deltaY > 0) {
-							showNext();
-						} else {
-							showPrev();
-						}
-					}, 50); // Debounce scroll events
-				}
-			}, {passive: false});
-
-			document.addEventListener('keydown', (event) => {
-				if (event.key === 'ArrowRight') {
-					showNext();
-				} else if (event.key === 'ArrowLeft') {
-					showPrev();
+		function updateCards() {
+			cards.forEach((card, index) => {
+				card.classList.remove('active', 'prev', 'next');
+				if (index === currentIndex) {
+					card.classList.add('active');
+				} else if (index === (currentIndex + 1) % cards.length) {
+					card.classList.add('next');
+				} else if (index === (currentIndex - 1 + cards.length) % cards.length) {
+					card.classList.add('prev');
 				}
 			});
+		}
 
-			const carousel = document.querySelector('.card-carousel');
-			let touchStartX = 0;
-			let touchEndX = 0;
+		function resetAutoRotate() {
+			clearInterval(autoRotateInterval);
+			autoRotateInterval = setInterval(showNext, 10000); // 10 seconds
+		}
 
-			carousel.addEventListener('touchstart', (event) => {
-				touchStartX = event.changedTouches[0].screenX;
-			}, {passive: true});
+		function showNext() {
+			currentIndex = (currentIndex + 1) % cards.length;
+			updateCards();
+			resetAutoRotate();
+		}
 
-			carousel.addEventListener('touchend', (event) => {
-				touchEndX = event.changedTouches[0].screenX;
-				handleSwipe();
-			}, {passive: true});
+		function showPrev() {
+			currentIndex = (currentIndex - 1 + cards.length) % cards.length;
+			updateCards();
+			resetAutoRotate();
+		}
 
-			function handleSwipe() {
-				const swipeThreshold = 50; // Minimum distance for a swipe
-				if (touchStartX - touchEndX > swipeThreshold) {
-					showNext();
-				} else if (touchEndX - touchStartX > swipeThreshold) {
-					showPrev();
-				}
+		function requestFullscreen() {
+			const elem = document.documentElement;
+			if (elem.requestFullscreen) {
+				elem.requestFullscreen();
+			} else if (elem.webkitRequestFullscreen) { // Safari
+				elem.webkitRequestFullscreen();
+			} else if (elem.msRequestFullscreen) { // IE11
+				elem.msRequestFullscreen();
+			}
+		}
+
+		// Initial setup
+		if (cards.length > 0) {
+			updateCards();
+			resetAutoRotate();
+			// Added this to go fullscreen.
+			document.body.addEventListener('click', requestFullscreen, {once: true});
+		}
+
+		// Scroll handling
+		let scrollTimeout;
+		window.addEventListener('wheel', (event) => {
+			if (window.innerWidth - event.clientX < 200) { // Detect scroll on the right side
+				event.preventDefault();
+				clearTimeout(scrollTimeout);
+				scrollTimeout = setTimeout(() => {
+					if (event.deltaY > 0) {
+						showNext();
+					} else {
+						showPrev();
+					}
+				}, 50); // Debounce scroll events
+			}
+		}, {passive: false});
+
+		document.addEventListener('keydown', (event) => {
+			if (event.key === 'ArrowRight') {
+				showNext();
+			} else if (event.key === 'ArrowLeft') {
+				showPrev();
 			}
 		});
-	</script>
-</body>
 
-</html>
+		const carousel = document.querySelector('.card-carousel');
+		let touchStartX = 0;
+		let touchEndX = 0;
+
+		carousel.addEventListener('touchstart', (event) => {
+			touchStartX = event.changedTouches[0].screenX;
+		}, {passive: true});
+
+		carousel.addEventListener('touchend', (event) => {
+			touchEndX = event.changedTouches[0].screenX;
+			handleSwipe();
+		}, {passive: true});
+
+		function handleSwipe() {
+			const swipeThreshold = 50; // Minimum distance for a swipe
+			if (touchStartX - touchEndX > swipeThreshold) {
+				showNext();
+			} else if (touchEndX - touchStartX > swipeThreshold) {
+				showPrev();
+			}
+		}
+	});
+</script>
