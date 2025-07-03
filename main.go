@@ -156,7 +156,11 @@ func mainImpl() error {
 			case time.Time:
 				skip = t.IsZero()
 			case time.Duration:
-				skip = t == 0
+				if t == 0 {
+					skip = true
+				} else {
+					a.Value = slog.DurationValue(t.Round(time.Millisecond))
+				}
 			case nil:
 				skip = true
 			}
@@ -214,7 +218,7 @@ func mainImpl() error {
 
 func main() {
 	if err := mainImpl(); err != nil {
-		if err != context.Canceled {
+		if err != context.Canceled && err != context.DeadlineExceeded {
 			fmt.Fprintln(os.Stderr, "devpostdash:", err)
 			os.Exit(1)
 		}

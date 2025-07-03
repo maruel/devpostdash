@@ -117,32 +117,63 @@
 			this.shadowRoot.appendChild(template.cloneNode(true));
 		}
 
+		static get observedAttributes() {
+			return ['url', 'title', 'winner', 'tagline', 'likes', 'team', 'description', 'tags'];
+		}
+
 		connectedCallback() {
-			this.shadowRoot.querySelector('h2 a').href = this.getAttribute('url');
-			this.shadowRoot.querySelector('slot[name="title"]').innerHTML = this.getAttribute('title');
-			if (this.hasAttribute('winner')) {
-				this.shadowRoot.querySelector('.winner').textContent = ' 🏆';
+			this._render();
+		}
+
+		attributeChangedCallback(name, oldValue, newValue) {
+			if (oldValue !== newValue) {
+				this._render();
 			}
-			this.shadowRoot.querySelector('slot[name="tagline"]').innerHTML = this.getAttribute('tagline');
-			this.shadowRoot.querySelector('slot[name="likes"]').innerHTML = this.getAttribute('likes');
-			const team = JSON.parse(this.getAttribute('team') || '[]');
+		}
+
+		_render() {
+			this.shadowRoot.querySelector('h2 a').href = this.getAttribute('url') || '';
+			this.shadowRoot.querySelector('slot[name="title"]').innerHTML = this.getAttribute('title') || '';
+			const winnerSpan = this.shadowRoot.querySelector('.winner');
+			if (this.hasAttribute('winner')) {
+				winnerSpan.textContent = ' 🏆';
+			} else {
+				winnerSpan.textContent = '';
+			}
+			this.shadowRoot.querySelector('slot[name="tagline"]').innerHTML = this.getAttribute('tagline') || '';
+			this.shadowRoot.querySelector('slot[name="likes"]').innerHTML = this.getAttribute('likes') || '';
+
 			const avatarsContainer = this.shadowRoot.querySelector('.team-avatars');
-			team.forEach(member => {
-				const teamMember = document.createElement('team-member');
-				teamMember.setAttribute('avatar-url', member.AvatarURL);
-				teamMember.setAttribute('member-name', member.Name);
-				teamMember.setAttribute('member-url', member.URL);
-				avatarsContainer.appendChild(teamMember);
-			});
-			this.shadowRoot.querySelector('slot[name="description"]').innerHTML = this.getAttribute('description');
-			const tags = JSON.parse(this.getAttribute('tags') || '[]');
+			avatarsContainer.innerHTML = ''; // Clear existing avatars
+			try {
+				const team = JSON.parse(this.getAttribute('team') || '[]');
+				team.forEach(member => {
+					const teamMember = document.createElement('team-member');
+					teamMember.setAttribute('avatar-url', member.AvatarURL);
+					teamMember.setAttribute('member-name', member.Name);
+					teamMember.setAttribute('member-url', member.URL);
+					avatarsContainer.appendChild(teamMember);
+				});
+			} catch (e) {
+				console.error('Error parsing team attribute:', e);
+			}
+
+			// TODO:
+			// this.shadowRoot.querySelector('slot[name="description"]').innerHTML = this.getAttribute('description') || '';
+
 			const tagsContainer = this.shadowRoot.querySelector('.tags');
-			tags.forEach(tag => {
-				const tagSpan = document.createElement('span');
-				tagSpan.textContent = tag;
-				tagSpan.classList.add('cp-tag');
-				tagsContainer.appendChild(tagSpan);
-			});
+			tagsContainer.innerHTML = ''; // Clear existing tags
+			try {
+				const tags = JSON.parse(this.getAttribute('tags') || '[]');
+				tags.forEach(tag => {
+					const tagSpan = document.createElement('span');
+					tagSpan.textContent = tag;
+					tagSpan.classList.add('cp-tag');
+					tagsContainer.appendChild(tagSpan);
+				});
+			} catch (e) {
+				console.error('Error parsing tags attribute:', e);
+			}
 		}
 	}
 

@@ -43,44 +43,44 @@
 		});
 		// Remove old cards
 		existingCards.forEach(card => card.remove());
+		await renderProjectDetails(projects, eventID);
+	}
 
+	async function renderProjectDetails(projects, eventID) {
 		// Second pass: Fetch detailed information and update existing cards
-		const detailedProjects = await Promise.all(projects.map(async (project) => {
-			const detailResponse = await fetch(`/api/events/${eventID}/${project.ID}`);
+		await Promise.all(projects.map(async (key) => {
+			const detailResponse = await fetch(`/api/events/${eventID}/${key.ID}`);
 			if (!detailResponse.ok) {
-				console.error(`HTTP error! status: ${detailResponse.status} for project ID: ${project.ID}`);
+				console.error(`HTTP error! status: ${detailResponse.status} for project ID: ${key.ID}`);
 				return null;
 			}
-			return detailResponse.json();
-		}));
-
-		detailedProjects.forEach(project => {
-			if (project) {
-				const card = document.querySelector(`project-card[url="${project.URL}"]`);
-				if (card) {
-					card.setAttribute('title', project.Title);
-					if (project.Winner) {
-						card.setAttribute('winner', '');
-					}
-					card.setAttribute('tagline', project.Tagline);
-					if (card.getAttribute('likes') !== project.Likes.toString()) {
-						card.setAttribute('likes', project.Likes);
-					}
-					card.setAttribute('team', JSON.stringify(project.Team));
-					card.setAttribute('description', JSON.stringify(project.Description));
-					card.setAttribute('tags', JSON.stringify(project.Tags));
+			const project = await detailResponse.json();
+			const card = document.querySelector(`project-card[url="${project.URL}"]`);
+			if (card) {
+				card.setAttribute('title', project.Title);
+				if (project.Winner) {
+					card.setAttribute('winner', '');
 				}
+				card.setAttribute('tagline', project.Tagline);
+				if (card.getAttribute('likes') !== project.Likes.toString()) {
+					card.setAttribute('likes', project.Likes);
+				}
+				card.setAttribute('team', JSON.stringify(project.Team));
+				card.setAttribute('description', JSON.stringify(project.Description));
+				card.setAttribute('tags', JSON.stringify(project.Tags));
 			}
-		});
+		}));
 	}
 
 	window.addEventListener('load', async () => {
 		const pathParts = window.location.pathname.split('/');
 		const eventID = pathParts[pathParts.indexOf('event') + 1];
 		if (eventID) {
-			renderProjects(eventID);
+			// The server already pre-loaded the projects but not the details.
+			// await renderProjectDetails(eventID);
+			await renderProjects(eventID);
 			setInterval(async () => {
-				renderProjects(eventID);
+				await renderProjects(eventID);
 			}, 30000);
 		}
 	});
