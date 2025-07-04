@@ -2,7 +2,7 @@
 // Use of this source code is governed under the Apache License, Version 2.0
 // that can be found in the LICENSE file.
 
-package main
+package devpost
 
 import (
 	"bytes"
@@ -65,17 +65,18 @@ type Event struct {
 	LastRefresh time.Time  `json:"last_refresh"`
 }
 
-type devpostClientInterface interface {
-	fetchProjects(ctx context.Context, eventID string) ([]*Project, error)
-	fetchProject(ctx context.Context, p *Project) error
+type Client interface {
+	io.Closer
+	FetchProjects(ctx context.Context, eventID string) ([]*Project, error)
+	FetchProject(ctx context.Context, p *Project) error
 }
 
-type devpostClient struct {
+type client struct {
 	c      http.Client
 	header http.Header
 }
 
-func newDevpostClient(ctx context.Context, h http.RoundTripper) (*devpostClient, error) {
+func New(ctx context.Context, h http.RoundTripper) (Client, error) {
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		return nil, err
@@ -83,7 +84,7 @@ func newDevpostClient(ctx context.Context, h http.RoundTripper) (*devpostClient,
 	jar.SetCookies(&url.URL{Scheme: "https", Host: "devpost.com"}, []*http.Cookie{
 		{Name: "platform.notifications.newsletter.dismissed", Value: "dismissed"},
 	})
-	out := &devpostClient{
+	out := &client{
 		header: http.Header{
 			"Referer":    []string{"https://vibe-coding-hackathon.devpost.com/rules"},
 			"User-Agent": []string{"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"},
@@ -98,7 +99,7 @@ func newDevpostClient(ctx context.Context, h http.RoundTripper) (*devpostClient,
 	return out, nil
 }
 
-func (d *devpostClient) get(ctx context.Context, url string) ([]byte, error) {
+func (d *client) get(ctx context.Context, url string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, err
@@ -113,12 +114,16 @@ func (d *devpostClient) get(ctx context.Context, url string) ([]byte, error) {
 		return nil, err
 	}
 	if resp.StatusCode != 200 {
-		err = &httpError{StatusCode: resp.StatusCode, Body: bod}
+		err = &HttpError{StatusCode: resp.StatusCode, Body: bod}
 	}
 	return bod, err
 }
 
-func (d *devpostClient) fetchProjects(ctx context.Context, eventID string) ([]*Project, error) {
+func (d *client) Close() error {
+	return nil
+}
+
+func (d *client) FetchProjects(ctx context.Context, eventID string) ([]*Project, error) {
 	var projects []*Project
 	var err error
 	start := time.Now()
@@ -151,7 +156,7 @@ func (d *devpostClient) fetchProjects(ctx context.Context, eventID string) ([]*P
 	return projects, nil
 }
 
-func (d *devpostClient) fetchProject(ctx context.Context, project *Project) error {
+func (d *client) FetchProject(ctx context.Context, project *Project) error {
 	start := time.Now()
 	var err error
 	defer func() {
@@ -179,8 +184,8 @@ func (d *devpostClient) fetchProject(ctx context.Context, project *Project) erro
 	return nil
 }
 
-type cachedDevpostClient struct {
-	d           devpostClientInterface
+type cachedClient struct {
+	d           Client
 	freshness   time.Duration
 	autoRefresh time.Duration
 	cacheFile   string
@@ -192,9 +197,9 @@ type cachedDevpostClient struct {
 	cancel context.CancelFunc
 }
 
-func newCachedDevpostClient(parentCtx context.Context, d devpostClientInterface, freshness, autoRefresh time.Duration, cacheFilePath string) (*cachedDevpostClient, error) {
+func NewCached(parentCtx context.Context, d Client, freshness, autoRefresh time.Duration, cacheFilePath string) (Client, error) {
 	ctx, cancel := context.WithCancel(parentCtx)
-	c := &cachedDevpostClient{
+	c := &cachedClient{
 		d:           d,
 		freshness:   freshness,
 		autoRefresh: autoRefresh,
@@ -210,7 +215,7 @@ func newCachedDevpostClient(parentCtx context.Context, d devpostClientInterface,
 	return c, nil
 }
 
-func (c *cachedDevpostClient) loadCache() error {
+func (c *cachedClient) loadCache() error {
 	f, err := os.Open(c.cacheFile)
 	defer slog.InfoContext(c.ctx, "devpost", "msg", "loaded cache", "err", err, "path", c.cacheFile)
 	if err != nil {
@@ -220,7 +225,7 @@ func (c *cachedDevpostClient) loadCache() error {
 		return err
 	}
 	defer f.Close()
-	data := serializedDevpost{}
+	data := serializedCache{}
 	if err = json.NewDecoder(f).Decode(&data); err != nil {
 		return err
 	}
@@ -230,12 +235,12 @@ func (c *cachedDevpostClient) loadCache() error {
 	return nil
 }
 
-func (c *cachedDevpostClient) Close() error {
+func (c *cachedClient) Close() error {
 	c.cancel()
 	return c.saveCache()
 }
 
-func (c *cachedDevpostClient) saveCache() error {
+func (c *cachedClient) saveCache() error {
 	f, err := os.Create(c.cacheFile)
 	defer slog.InfoContext(c.ctx, "devpost", "msg", "saved cache", "err", err)
 	if err != nil {
@@ -243,13 +248,13 @@ func (c *cachedDevpostClient) saveCache() error {
 	}
 	defer f.Close()
 	c.mu.Lock()
-	data := serializedDevpost{Version: 1, Events: c.events}
+	data := serializedCache{Version: 1, Events: c.events}
 	err = json.NewEncoder(f).Encode(&data)
 	c.mu.Unlock()
 	return err
 }
 
-func (c *cachedDevpostClient) autoRefreshLoop() {
+func (c *cachedClient) autoRefreshLoop() {
 	ticker := time.NewTicker(c.autoRefresh)
 	defer ticker.Stop()
 	for {
@@ -269,7 +274,7 @@ func (c *cachedDevpostClient) autoRefreshLoop() {
 			for _, eventID := range eventIDsToRefresh {
 				slog.InfoContext(c.ctx, "devpost", "msg", "auto-refreshing event", "eventID", eventID)
 				go func(eventID string) {
-					_, err := c.fetchProjects(c.ctx, eventID)
+					_, err := c.FetchProjects(c.ctx, eventID)
 					if err != nil {
 						slog.ErrorContext(c.ctx, "devpost", "msg", "failed to auto-refresh event", "eventID", eventID, "err", err)
 					}
@@ -279,7 +284,7 @@ func (c *cachedDevpostClient) autoRefreshLoop() {
 	}
 }
 
-func (c *cachedDevpostClient) fetchProjects(ctx context.Context, eventID string) ([]*Project, error) {
+func (c *cachedClient) FetchProjects(ctx context.Context, eventID string) ([]*Project, error) {
 	c.mu.Lock()
 	e := c.events[eventID]
 	c.mu.Unlock()
@@ -287,7 +292,7 @@ func (c *cachedDevpostClient) fetchProjects(ctx context.Context, eventID string)
 		return e.Projects, nil
 	}
 
-	projects, err := c.d.fetchProjects(ctx, eventID)
+	projects, err := c.d.FetchProjects(ctx, eventID)
 	if err != nil {
 		// If we have stale data, it's better to return it than nothing.
 		if e != nil {
@@ -322,11 +327,11 @@ func (c *cachedDevpostClient) fetchProjects(ctx context.Context, eventID string)
 	return projects, nil
 }
 
-func (c *cachedDevpostClient) fetchProject(ctx context.Context, project *Project) error {
+func (c *cachedClient) FetchProject(ctx context.Context, project *Project) error {
 	if time.Since(project.LastRefresh) < c.freshness {
 		return nil
 	}
-	err := c.d.fetchProject(ctx, project)
+	err := c.d.FetchProject(ctx, project)
 	if err == nil {
 		project.LastRefresh = time.Now()
 	}
@@ -335,7 +340,7 @@ func (c *cachedDevpostClient) fetchProject(ctx context.Context, project *Project
 
 //
 
-type serializedDevpost struct {
+type serializedCache struct {
 	Version int               `json:"version"`
 	Events  map[string]*Event `json:"events"`
 }
@@ -393,11 +398,11 @@ func parseProjectNode(n *html.Node) Project {
 	return p
 }
 
-type httpError struct {
+type HttpError struct {
 	StatusCode int
 	Body       []byte
 }
 
-func (e httpError) Error() string {
+func (e *HttpError) Error() string {
 	return fmt.Sprintf("status %d: %s", e.StatusCode, e.Body)
 }

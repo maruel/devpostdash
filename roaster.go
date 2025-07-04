@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/maruel/devpostdash/devpost"
 	"github.com/maruel/genai"
 )
 
@@ -76,7 +77,7 @@ const (
 	softRoast = "Roast the following project. Be funny and concise. Reply with only one lighthearted sentence, nothing else."
 )
 
-func (r *roaster) doRoast(ctx context.Context, p *Project) (string, error) {
+func (r *roaster) doRoast(ctx context.Context, p *devpost.Project) (string, error) {
 	r.mu.Lock()
 	roast := r.roasts[p.ID]
 	r.mu.Unlock()

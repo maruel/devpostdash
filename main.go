@@ -22,6 +22,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/lmittmann/tint"
+	"github.com/maruel/devpostdash/devpost"
 	"github.com/maruel/genai"
 	"github.com/maruel/genai/base"
 	"github.com/maruel/genai/providers"
@@ -33,7 +34,7 @@ import (
 	"gopkg.in/dnaeon/go-vcr.v4/pkg/recorder"
 )
 
-func printProjects(projects []*Project) {
+func printProjects(projects []*devpost.Project) {
 	for _, p := range projects {
 		fmt.Printf("%s: %s\n", p.Title, p.URL)
 		// ID, URL, Image, Description, Team
@@ -221,19 +222,20 @@ func mainImpl() error {
 	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
 		return err
 	}
-	rawDevpostClient, err := newDevpostClient(ctx, &roundtrippers.Throttle{Transport: h, QPS: 1})
+	rawDevpostClient, err := devpost.New(ctx, &roundtrippers.Throttle{Transport: h, QPS: 1})
 	if err != nil {
 		return err
 	}
+	defer rawDevpostClient.Close()
 	// Refresh every 5 minutes, and cache for 1 hour.
-	d, err := newCachedDevpostClient(ctx, rawDevpostClient, 5*time.Minute, 1*time.Hour, filepath.Join(cacheDir, "devpost.json"))
+	d, err := devpost.NewCached(ctx, rawDevpostClient, 5*time.Minute, 1*time.Hour, filepath.Join(cacheDir, "devpost.json"))
 	if err != nil {
 		return err
 	}
 	defer d.Close()
 
 	if *dump != "" {
-		projects, err := d.fetchProjects(ctx, *dump)
+		projects, err := d.FetchProjects(ctx, *dump)
 		if err != nil {
 			return err
 		}

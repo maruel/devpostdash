@@ -17,6 +17,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/maruel/devpostdash/devpost"
 )
 
 //go:embed templates/*.html
@@ -25,7 +27,7 @@ var templatesFS embed.FS
 var templates = template.Must(template.ParseFS(templatesFS, "templates/*.html"))
 
 type webserver struct {
-	d devpostClientInterface
+	d devpost.Client
 	r *roaster
 }
 
@@ -56,7 +58,7 @@ func (s *webserver) handleEventRedirect(w http.ResponseWriter, r *http.Request) 
 
 func handleError(ctx context.Context, w http.ResponseWriter, err error) {
 	slog.ErrorContext(ctx, "web", "err", err)
-	var herr *httpError
+	var herr *devpost.HttpError
 	if errors.As(err, &herr) {
 		w.WriteHeader(herr.StatusCode)
 		_, _ = w.Write(herr.Body)
@@ -76,7 +78,7 @@ func (s *webserver) handleEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	projects, err := s.d.fetchProjects(ctx, eventID)
+	projects, err := s.d.FetchProjects(ctx, eventID)
 	if err != nil {
 		handleError(ctx, w, err)
 		return
@@ -84,7 +86,7 @@ func (s *webserver) handleEvent(w http.ResponseWriter, r *http.Request) {
 
 	// projectData is a superset of Project.
 	type projectData struct {
-		*Project
+		*devpost.Project
 		TeamJSON string
 	}
 	templateProjects := make([]projectData, len(projects))
@@ -112,7 +114,7 @@ func (s *webserver) handleEvent(w http.ResponseWriter, r *http.Request) {
 func (s *webserver) apiEvent(w http.ResponseWriter, r *http.Request) {
 	eventID := r.PathValue("eventID")
 	ctx := r.Context()
-	projects, err := s.d.fetchProjects(ctx, eventID)
+	projects, err := s.d.FetchProjects(ctx, eventID)
 	if err != nil {
 		handleError(ctx, w, err)
 		return
@@ -145,7 +147,7 @@ func (s *webserver) apiRoast(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	if err := json.NewDecoder(r.Body).Decode(&roastReq); err != nil {
-		handleError(ctx, w, &httpError{StatusCode: http.StatusBadRequest, Body: []byte(err.Error())})
+		handleError(ctx, w, &devpost.HttpError{StatusCode: http.StatusBadRequest, Body: []byte(err.Error())})
 		return
 	}
 	p, err := s.getProject(ctx, roastReq.EventID, roastReq.ProjectID)
@@ -164,12 +166,12 @@ func (s *webserver) apiRoast(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *webserver) getProject(ctx context.Context, eventID, projectID string) (*Project, error) {
-	projects, err := s.d.fetchProjects(ctx, eventID)
+func (s *webserver) getProject(ctx context.Context, eventID, projectID string) (*devpost.Project, error) {
+	projects, err := s.d.FetchProjects(ctx, eventID)
 	if err != nil {
 		return nil, err
 	}
-	var p *Project
+	var p *devpost.Project
 	for i := range projects {
 		if projects[i].ID == projectID {
 			p = projects[i]
@@ -177,13 +179,13 @@ func (s *webserver) getProject(ctx context.Context, eventID, projectID string) (
 		}
 	}
 	if p == nil {
-		return nil, &httpError{
+		return nil, &devpost.HttpError{
 			StatusCode: http.StatusNotFound,
 			Body:       []byte(fmt.Sprintf("project %q not found", eventID+"/"+projectID)),
 		}
 	}
 	// Refresh description and tags for the single project
-	if err := s.d.fetchProject(ctx, p); err != nil {
+	if err := s.d.FetchProject(ctx, p); err != nil {
 		return nil, err
 	}
 	return p, nil
@@ -232,7 +234,7 @@ func getRealIP(r *http.Request) net.IP {
 	return nil
 }
 
-func newWebServerHandler(d devpostClientInterface, r *roaster) http.Handler {
+func newWebServerHandler(d devpost.Client, r *roaster) http.Handler {
 	w := &webserver{d: d, r: r}
 
 	mux := http.NewServeMux()
@@ -246,7 +248,7 @@ func newWebServerHandler(d devpostClientInterface, r *roaster) http.Handler {
 	return loggingMiddleware(mux)
 }
 
-func runWebserver(ctx context.Context, host string, d devpostClientInterface, r *roaster) error {
+func runWebserver(ctx context.Context, host string, d devpost.Client, r *roaster) error {
 	handler := newWebServerHandler(d, r)
 	lc := net.ListenConfig{}
 	ln, err := lc.Listen(ctx, "tcp", host)

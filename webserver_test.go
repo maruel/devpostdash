@@ -7,14 +7,16 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/maruel/devpostdash/devpost"
 )
 
 // mockDevpostClient implements devpostClientInterface for testing.
 type mockDevpostClient struct{}
 
-func (m *mockDevpostClient) fetchProjects(ctx context.Context, eventID string) ([]*Project, error) {
+func (m *mockDevpostClient) FetchProjects(ctx context.Context, eventID string) ([]*devpost.Project, error) {
 	if eventID == "fake-event" {
-		return []*Project{
+		return []*devpost.Project{
 			{
 				ID:        "1",
 				ShortName: "project-one",
@@ -23,7 +25,7 @@ func (m *mockDevpostClient) fetchProjects(ctx context.Context, eventID string) (
 				Tagline:   "This is the first fake project.",
 				Image:     "http://example.com/image-one.png",
 				Winner:    false,
-				Team:      []Person{{Name: "Alice", URL: "http://example.com/alice", AvatarURL: "http://example.com/alice.png"}},
+				Team:      []devpost.Person{{Name: "Alice", URL: "http://example.com/alice", AvatarURL: "http://example.com/alice.png"}},
 				Likes:     10,
 			},
 			{
@@ -34,7 +36,7 @@ func (m *mockDevpostClient) fetchProjects(ctx context.Context, eventID string) (
 				Tagline:   "This is the second fake project.",
 				Image:     "http://example.com/image-two.png",
 				Winner:    true,
-				Team:      []Person{{Name: "Bob", URL: "http://example.com/bob", AvatarURL: "http://example.com/bob.png"}},
+				Team:      []devpost.Person{{Name: "Bob", URL: "http://example.com/bob", AvatarURL: "http://example.com/bob.png"}},
 				Likes:     20,
 			},
 		}, nil
@@ -42,8 +44,12 @@ func (m *mockDevpostClient) fetchProjects(ctx context.Context, eventID string) (
 	return nil, nil
 }
 
-func (m *mockDevpostClient) fetchProject(ctx context.Context, p *Project) error {
+func (m *mockDevpostClient) FetchProject(ctx context.Context, p *devpost.Project) error {
 	// No-op for this test
+	return nil
+}
+
+func (m *mockDevpostClient) Close() error {
 	return nil
 }
 
