@@ -14,12 +14,19 @@
 		project-card {
 			position: absolute;
 			width: 70vw;
-			max-width: 70vh;
+			max-width: 70vw;
 			height: 80vh;
 			max-height: 90vh;
 			transform-style: preserve-3d;
 			opacity: 0;
 			overflow: hidden;
+		}
+
+		@media (max-width: 768px) {
+			project-card {
+				width: 90vw;
+				max-width: 90vw;
+			}
 		}
 
 		project-card.active,
