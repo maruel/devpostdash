@@ -88,6 +88,7 @@ func (s *webserver) handleEvent(w http.ResponseWriter, r *http.Request) {
 	type projectData struct {
 		*devpost.Project
 		TeamJSON string
+		TagsJSON string
 	}
 	templateProjects := make([]projectData, len(projects))
 	for i, p := range projects {
@@ -96,7 +97,12 @@ func (s *webserver) handleEvent(w http.ResponseWriter, r *http.Request) {
 			handleError(ctx, w, err)
 			return
 		}
-		templateProjects[i] = projectData{Project: p, TeamJSON: string(teamJSON)}
+		tagsJSON, err := json.Marshal(p.Tags)
+		if err != nil {
+			handleError(ctx, w, err)
+			return
+		}
+		templateProjects[i] = projectData{Project: p, TeamJSON: string(teamJSON), TagsJSON: string(tagsJSON)}
 	}
 	sort.Slice(templateProjects, func(i, j int) bool {
 		return templateProjects[i].Likes > templateProjects[j].Likes
