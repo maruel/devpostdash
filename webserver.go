@@ -232,7 +232,7 @@ func getRealIP(r *http.Request) net.IP {
 	return nil
 }
 
-func runWebserver(ctx context.Context, host string, d devpostClientInterface, r *roaster) error {
+func newWebServerHandler(d devpostClientInterface, r *roaster) http.Handler {
 	w := &webserver{d: d, r: r}
 
 	mux := http.NewServeMux()
@@ -243,14 +243,18 @@ func runWebserver(ctx context.Context, host string, d devpostClientInterface, r 
 	mux.HandleFunc("GET /api/events/{eventID}", w.apiEvent)
 	mux.HandleFunc("GET /api/events/{eventID}/{projectID}", w.apiProject)
 	mux.HandleFunc("POST /api/roast", w.apiRoast)
+	return loggingMiddleware(mux)
+}
 
+func runWebserver(ctx context.Context, host string, d devpostClientInterface, r *roaster) error {
+	handler := newWebServerHandler(d, r)
 	lc := net.ListenConfig{}
 	ln, err := lc.Listen(ctx, "tcp", host)
 	if err != nil {
 		return err
 	}
 	slog.InfoContext(ctx, "web", "listening", ln.Addr())
-	s := &http.Server{Handler: loggingMiddleware(mux), ReadHeaderTimeout: 2 * time.Second}
+	s := &http.Server{Handler: handler, ReadHeaderTimeout: 2 * time.Second}
 	errCh := make(chan error)
 	go func() {
 		err2 := s.Serve(ln)
