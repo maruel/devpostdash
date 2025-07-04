@@ -12,24 +12,11 @@
 			let card = existingCards.get(project.url);
 			if (!card) {
 				card = document.createElement('project-card');
-				card.setAttribute('project-id', project.id);
-				card.setAttribute('url', project.url);
 				container.appendChild(card);
 			} else {
 				existingCards.delete(project.url);
 			}
-			card.setAttribute('title', project.title);
-			if (project.winner) {
-				card.setAttribute('winner', '');
-			}
-			card.setAttribute('tagline', project.tagline);
-			if (card.getAttribute('likes') !== project.likes.toString()) {
-				card.setAttribute('likes', project.likes);
-			}
-			card.setAttribute('team', JSON.stringify(project.team));
-			// They may not be present.
-			card.setAttribute('description', JSON.stringify(project.description || ''));
-			card.setAttribute('tags', JSON.stringify(project.tags || []));
+			card.setAttribute('data-json', JSON.stringify(project));
 		});
 		// Remove old cards
 		existingCards.forEach(card => card.remove());
@@ -42,19 +29,9 @@
 		// Second pass: Fetch detailed information and update existing cards
 		await Promise.all(projects.map(async (key) => {
 			const project = await fetchProject(eventID, key.id);
-			const card = document.querySelector(`project-card[url="${project.url}"]`);
+			const card = document.querySelector(`project-card[url=\"${project.url}\"]`);
 			if (card) {
-				card.setAttribute('title', project.title);
-				if (project.winner) {
-					card.setAttribute('winner', '');
-				}
-				card.setAttribute('tagline', project.tagline);
-				if (card.getAttribute('likes') !== project.likes.toString()) {
-					card.setAttribute('likes', project.likes);
-				}
-				card.setAttribute('team', JSON.stringify(project.team || []));
-				card.setAttribute('description', JSON.stringify(project.description || ''));
-				card.setAttribute('tags', JSON.stringify(project.tags || []));
+				card.setAttribute('data-json', JSON.stringify(project));
 			}
 		}));
 	}

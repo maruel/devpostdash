@@ -80,7 +80,7 @@
       <td>{{.Tagline}}</td>
       <td>
         {{range .Team}}
-        <team-member avatar-url="{{.AvatarURL}}" member-name="{{.Name}}" member-url="{{.URL}}"></team-member>
+        <team-member data-json="{{jsonMarshal .}}"></team-member>
         {{end}}
       </td>
       <td>{{.Likes}}</td>
@@ -133,9 +133,7 @@
 			if (project.team) {
 				project.team.forEach(member => {
 					const teamMember = document.createElement('team-member');
-					teamMember.setAttribute('avatar-url', member.avatar_url);
-					teamMember.setAttribute('member-name', member.name);
-					teamMember.setAttribute('member-url', member.url);
+					teamMember.setAttribute('data-json', JSON.stringify(member));
 					teamCell.appendChild(teamMember);
 				});
 			}

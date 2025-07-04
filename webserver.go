@@ -24,7 +24,15 @@ import (
 //go:embed templates/*.html
 var templatesFS embed.FS
 
-var templates = template.Must(template.ParseFS(templatesFS, "templates/*.html"))
+var templates = template.Must(template.New("").Funcs(template.FuncMap{"jsonMarshal": jsonMarshal}).ParseFS(templatesFS, "templates/*.html"))
+
+func jsonMarshal(v any) (template.JS, error) {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return "", err
+	}
+	return template.JS(b), nil
+}
 
 type webserver struct {
 	d devpost.Client
@@ -83,34 +91,14 @@ func (s *webserver) handleEvent(w http.ResponseWriter, r *http.Request) {
 		handleError(ctx, w, err)
 		return
 	}
-
-	// projectData is a superset of Project.
-	type projectData struct {
-		*devpost.Project
-		TeamJSON string
-		TagsJSON string
-	}
-	templateProjects := make([]projectData, len(projects))
-	for i, p := range projects {
-		teamJSON, err := json.Marshal(p.Team)
-		if err != nil {
-			handleError(ctx, w, err)
-			return
-		}
-		tagsJSON, err := json.Marshal(p.Tags)
-		if err != nil {
-			handleError(ctx, w, err)
-			return
-		}
-		templateProjects[i] = projectData{Project: p, TeamJSON: string(teamJSON), TagsJSON: string(tagsJSON)}
-	}
-	sort.Slice(templateProjects, func(i, j int) bool {
-		return templateProjects[i].Likes > templateProjects[j].Likes
+	// Not really necessary?
+	sort.Slice(projects, func(i, j int) bool {
+		return projects[i].Likes > projects[j].Likes
 	})
 	data := map[string]any{
 		"Title":    eventID,
 		"EventID":  eventID,
-		"Projects": templateProjects,
+		"Projects": projects,
 	}
 	if err := tmpl.Execute(w, data); err != nil {
 		handleError(ctx, w, err)

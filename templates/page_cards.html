@@ -64,8 +64,7 @@
 <h1>{{.Title}}</h1>
 <div class="project-container" id="projects-container">
   {{range .Projects}}
-  <project-card url="{{.URL}}" project-id="{{.ID}}" title="{{.Title}}" {{if .Winner}}winner{{end}} tagline="{{.Tagline}}" likes="{{.Likes}}" team='{{.TeamJSON}}' description='{{.Description}}' tags='{{.TagsJSON}}'>
-  </project-card>
+  <project-card data-json='{{jsonMarshal .}}'></project-card>
   {{end}}
 </div>
 <p class="github-link">
@@ -93,7 +92,7 @@
 			});
 			// Reconnect the observer after reordering is complete
 			if (observer && container) {
-				observer.observe(container, {childList: true, subtree: true, attributes: true, attributeFilter: ['likes']});
+				observer.observe(container, {childList: true, subtree: true, attributes: true, attributeFilter: ['data-json']});
 			}
 		}
 	}
@@ -104,13 +103,13 @@
 		if (projectsContainer) {
 			observer = new MutationObserver((mutationsList, obs) => {
 				for (const mutation of mutationsList) {
-					if (mutation.type === 'childList' || (mutation.type === 'attributes' && mutation.attributeName === 'likes')) {
+					if (mutation.type === 'childList' || (mutation.type === 'attributes' && mutation.attributeName === 'data-json')) {
 						sortCards();
 						break; // Only need to sort once per batch of mutations
 					}
 				}
 			});
-			observer.observe(projectsContainer, {childList: true, subtree: true, attributes: true, attributeFilter: ['likes']});
+			observer.observe(projectsContainer, {childList: true, subtree: true, attributes: true, attributeFilter: ['data-json']});
 		}
 	});
 </script>

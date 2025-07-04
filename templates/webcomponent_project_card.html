@@ -128,7 +128,19 @@
 		}
 
 		static get observedAttributes() {
-			return ['url', 'title', 'winner', 'tagline', 'likes', 'team', 'description', 'tags'];
+			return ['data-json'];
+		}
+
+		get data() {
+			return JSON.parse(this.getAttribute('data-json') || '{}') || {};
+		}
+
+		get likes() {
+			return this.data.likes;
+		}
+
+		get url() {
+			return this.data.url;
 		}
 
 		connectedCallback() {
@@ -153,28 +165,25 @@
 		}
 
 		_render() {
-			this.shadowRoot.querySelector('h2 a').href = this.getAttribute('url') || '';
-			this.shadowRoot.querySelector('#title-content').textContent = this.getAttribute('title') || '';
+			const data = this.data;
+			this.shadowRoot.querySelector('h2 a').href = data.url || '';
+			this.shadowRoot.querySelector('#title-content').textContent = data.title || '';
 			const winnerSpan = this.shadowRoot.querySelector('.winner');
-			if (this.hasAttribute('winner')) {
+			if (data.winner) {
 				winnerSpan.textContent = ' 🏆';
 			} else {
 				winnerSpan.textContent = '';
 			}
-			this.shadowRoot.querySelector('#tagline-content').textContent = this.getAttribute('tagline') || '';
-			this.shadowRoot.querySelector('#likes-content').textContent = this.getAttribute('likes') || '';
-
+			this.shadowRoot.querySelector('#tagline-content').textContent = data.tagline || '';
+			this.shadowRoot.querySelector('#likes-content').textContent = data.likes || '';
 			const avatarsContainer = this.shadowRoot.querySelector('.team-avatars');
 			while (avatarsContainer.firstChild) {
 				avatarsContainer.removeChild(avatarsContainer.firstChild);
 			} // Clear existing avatars
 			try {
-				const team = JSON.parse(this.getAttribute('team')) || [];
-				team.forEach(member => {
+				(data.team || []).forEach(member => {
 					const teamMember = document.createElement('team-member');
-					teamMember.setAttribute('avatar-url', member.avatar_url);
-					teamMember.setAttribute('member-name', member.name);
-					teamMember.setAttribute('member-url', member.url);
+					teamMember.setAttribute('data-json', JSON.stringify(member));
 					avatarsContainer.appendChild(teamMember);
 				});
 			} catch (e) {
@@ -182,15 +191,14 @@
 			}
 
 			// Do not show the description for now because it is too long.
-			// this.shadowRoot.querySelector('#description-content').textContent = this.getAttribute('description') || '';
+			// this.shadowRoot.querySelector('#description-content').textContent = data.description || '';
 
 			const tagsContainer = this.shadowRoot.querySelector('.tags');
 			while (tagsContainer.firstChild) {
 				tagsContainer.removeChild(tagsContainer.firstChild);
 			} // Clear existing tags
 			try {
-				const tags = JSON.parse(this.getAttribute('tags')) || [];
-				tags.forEach(tag => {
+				(data.Tags || []).forEach(tag => {
 					const tagSpan = document.createElement('span');
 					tagSpan.textContent = tag;
 					tagSpan.classList.add('cp-tag');
@@ -207,10 +215,11 @@
 		}
 
 		async _loadRoastTagline() {
+			const data = this.data;
 			const eventID = '{{.EventID}}';
-			const projectID = this.getAttribute('project-id');
+			const projectID = data.id;
 			const elem = this.shadowRoot.querySelector('#roast-tagline-content');
-			if (elem.textContent || !this.getAttribute('description')) {
+			if (elem.textContent || !data.description) {
 				// Do not update the roast once created or if the description is not loaded yet.
 				return false;
 			}

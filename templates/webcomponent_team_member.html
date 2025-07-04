@@ -65,15 +65,31 @@
 			this.shadowRoot.appendChild(template.cloneNode(true));
 		}
 
+		static get observedAttributes() {
+			return ['data-json'];
+		}
+
+		get data() {
+			return JSON.parse(this.getAttribute('data-json') || '{}') || {};
+		}
+
 		connectedCallback() {
-			const avatarUrl = this.getAttribute('avatar-url');
-			const memberName = this.getAttribute('member-name');
-			const memberUrl = this.getAttribute('member-url');
-			this.shadowRoot.querySelector('.team-member-name').textContent = memberName;
-			this.shadowRoot.querySelector('.team-member-link').href = memberUrl;
+			this._render();
+		}
+
+		attributeChangedCallback(name, oldValue, newValue) {
+			if (name === 'data-json' && oldValue !== newValue) {
+				this._render();
+			}
+		}
+
+		_render() {
+			const data = this.data;
+			this.shadowRoot.querySelector('.team-member-name').textContent = data.name;
+			this.shadowRoot.querySelector('.team-member-link').href = data.url;
 			const img = this.shadowRoot.querySelector('img');
-			img.src = avatarUrl;
-			img.alt = memberName;
+			img.src = data.avatar_url;
+			img.alt = data.name;
 			img.onerror = () => {
 				img.style.display = 'none';
 				this.shadowRoot.querySelector('.avatar-fallback').style.display = 'inline-flex';
