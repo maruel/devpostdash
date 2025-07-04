@@ -6,8 +6,6 @@
 		const container = document.getElementById('projects-container');
 		const existingCards = new Map(Array.from(container.children).map(card => [card.getAttribute('url'), card]));
 		const projects = await fetchProjects(eventID);
-
-		// First pass: Create/update cards based on project IDs (initial rendering)
 		projects.forEach((project) => {
 			let card = existingCards.get(project.url);
 			if (!card) {
@@ -23,30 +21,12 @@
 		});
 		// Remove old cards
 		existingCards.forEach(card => card.remove());
-		await renderProjectDetails(projects, eventID);
-	}
-
-	// TODO: Not sure it's necessary anymore.
-	async function renderProjectDetails(projects, eventID) {
-		// Second pass: Fetch detailed information and update existing cards
-		await Promise.all(projects.map(async (key) => {
-			const project = await fetchProject(eventID, key.id);
-			const card = document.querySelector(`project-card[url=\"${project.url}\"]`);
-			if (card) {
-				const raw = JSON.stringify(project);
-				if (card.getAttribute('data-json') !== raw) {
-					card.setAttribute('data-json', raw);
-				}
-			}
-		}));
 	}
 
 	window.addEventListener('load', async () => {
 		const pathParts = window.location.pathname.split('/');
 		const eventID = pathParts[pathParts.indexOf('event') + 1];
 		if (eventID) {
-			// The server already pre-loaded the projects but not the details.
-			// await renderProjectDetails(eventID);
 			await renderProjects(eventID);
 			setInterval(async () => {
 				await renderProjects(eventID);
