@@ -1,106 +1,189 @@
 {{template "webcomponent_project_card.html" .}}
-<style>
-  .card-carousel {
-		position: relative;
-		width: 100vw;
-		height: 100vh;
-		perspective: 1000px;
-		display: flex;
-		justify-content: center;
-		align-items: center;
-	}
+<template id="project-card-carousel-template">
+  <style>
+    .card-carousel {
+			position: relative;
+			width: 100vw;
+			height: 100vh;
+			perspective: 1000px;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+		}
 
-	project-card {
-		position: absolute;
-		width: 40vw;
-		height: 70vh;
-		max-height: 70vh;
-		transition: transform 0.8s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.8s;
-		transform-style: preserve-3d;
-		opacity: 0;
-		transform: translateZ(-200px) rotateY(0deg);
-		overflow: hidden;
-	}
-
-	project-card.active {
-		opacity: 1;
-		transform: translateZ(0) rotateY(0deg);
-		z-index: 10;
-	}
-
-	project-card.next {
-		opacity: 0.5;
-		transform: translateX(50%) translateZ(-100px) rotateY(-45deg);
-		z-index: 5;
-	}
-
-	project-card.prev {
-		opacity: 0.5;
-		transform: translateX(-50%) translateZ(-100px) rotateY(45deg);
-		z-index: 5;
-	}
-
-	@media screen and (orientation: portrait) {
 		project-card {
-			width: 80vw;
+			position: absolute;
+			width: 70vw;
+			max-width: 70vh;
+			height: 80vh;
+			max-height: 90vh;
+			transform-style: preserve-3d;
+			opacity: 0;
+			overflow: hidden;
+		}
+
+		project-card.active,
+		project-card.next,
+		project-card.prev {
+			transition: transform 0.8s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.8s;
+		}
+
+		project-card.active {
+			opacity: 1;
+			transform: translateZ(0) rotateY(0deg);
+		}
+
+		project-card.active {
+			opacity: 1;
+			transform: translateZ(0) rotateY(0deg);
+			z-index: 10;
 		}
 
 		project-card.next {
-			transform: translateX(30%) translateZ(-100px) rotateY(-45deg);
+			opacity: 0.4;
+			transform: translateX(50%) translateZ(-100px) rotateY(-45deg);
+			z-index: 5;
 		}
 
 		project-card.prev {
-			transform: translateX(-30%) translateZ(-100px) rotateY(45deg);
+			opacity: 0.4;
+			transform: translateX(-50%) translateZ(-100px) rotateY(45deg);
+			z-index: 5;
 		}
-	}
-</style>
-<div class="card-carousel" id="projects-container">
-  {{range .Projects}}
-  <project-card data-json='{{jsonMarshal .}}'></project-card>
-  {{end}}
-</div>
+  </style>
+  <div class="card-carousel" id="projects-container">
+    {{range .Projects}}
+    <project-card data-json='{{jsonMarshal .}}'></project-card>
+    {{end}}
+  </div>
+</template>
 <script>
   'use strict';
-	document.addEventListener('DOMContentLoaded', () => {
-		const cards = document.querySelectorAll('project-card');
-		let currentIndex = 0;
-		let autoRotateInterval;
+	class Carousel extends HTMLElement {
+		constructor() {
+			super();
+			this.attachShadow({mode: 'open'});
+			const template = document.getElementById('project-card-carousel-template').content;
+			this.shadowRoot.appendChild(template.cloneNode(true));
 
-		function updateCards() {
+			this.currentIndex = 0;
+			this.autoRotateInterval = null;
+			this.scrollTimeout = null;
+			this.touchStartX = 0;
+			this.touchEndX = 0;
+
+			this.container = this.shadowRoot.getElementById('projects-container');
+			this.observer = new MutationObserver((mutationsList, obs) => {
+				for (const mutation of mutationsList) {
+					if (mutation.type === 'childList' || (mutation.type === 'attributes' && mutation.attributeName === 'data-json')) {
+						this.updateCards();
+						break; // Only need to sort once per batch of mutations
+					}
+				}
+			});
+
+			this.boundShowNext = this.showNext.bind(this);
+			this.boundShowPrev = this.showPrev.bind(this);
+			this.boundHandleWheel = this.handleWheel.bind(this);
+			this.boundHandleKeyDown = this.handleKeyDown.bind(this);
+			this.boundHandleTouchStart = this.handleTouchStart.bind(this);
+			this.boundHandleTouchEnd = this.handleTouchEnd.bind(this);
+			this.boundRequestFullscreen = this.requestFullscreen.bind(this);
+			this.boundOnLoad = this.onLoad.bind(this);
+		}
+
+		static get observedAttributes() {
+			return ['data-json'];
+		}
+
+		get data() {
+			return JSON.parse(this.getAttribute('data-json') || '{}') || {};
+		}
+
+		connectedCallback() {
+			this._render();
+			this.observer.observe(this.container, {childList: true, subtree: true, attributes: true, attributeFilter: ['data-json']});
+			this.updateCards();
+
+			document.body.addEventListener('click', this.boundRequestFullscreen, {once: true});
+			window.addEventListener('wheel', this.boundHandleWheel, {passive: false});
+			window.addEventListener('load', this.boundOnLoad, {passive: false});
+			document.addEventListener('keydown', this.boundHandleKeyDown);
+			this.container.addEventListener('touchstart', this.boundHandleTouchStart, {passive: true});
+			this.container.addEventListener('touchend', this.boundHandleTouchEnd, {passive: true});
+		}
+
+		disconnectedCallback() {
+			this.observer.disconnect();
+			clearInterval(this.autoRotateInterval);
+			clearTimeout(this.scrollTimeout);
+			document.body.removeEventListener('click', this.boundRequestFullscreen);
+			window.removeEventListener('wheel', this.boundHandleWheel);
+			document.removeEventListener('keydown', this.boundHandleKeyDown);
+			this.container.removeEventListener('touchstart', this.boundHandleTouchStart);
+			this.container.removeEventListener('touchend', this.boundHandleTouchEnd);
+		}
+
+		attributeChangedCallback(name, oldValue, newValue) {
+			if (name === 'data-json' && oldValue !== newValue) {
+				this._render();
+			}
+		}
+
+		_render() {
+			const data = this.data;
+			// TODO: Add render.
+		}
+
+		updateCards() {
+			// Disconnect the observer to prevent re-triggering during reordering
+			this.observer.disconnect();
+			const cards = this.container.querySelectorAll('project-card');
 			cards.forEach((card, index) => {
 				card.classList.remove('active', 'prev', 'next');
-				if (index === currentIndex) {
+				if (index === this.currentIndex) {
 					card.classList.add('active');
-				} else if (index === (currentIndex + 1) % cards.length) {
+				} else if (index === (this.currentIndex + 1) % cards.length) {
 					card.classList.add('next');
-				} else if (index === (currentIndex - 1 + cards.length) % cards.length) {
+				} else if (index === (this.currentIndex - 1 + cards.length) % cards.length) {
 					card.classList.add('prev');
 				}
 			});
+			// Reconnect the observer after reordering is complete
+			this.observer.observe(this.container, {childList: true, subtree: true, attributes: true, attributeFilter: ['data-json']});
+
+			clearInterval(this.autoRotateInterval);
+			this.autoRotateInterval = setInterval(this.boundShowNext, 10000); // 10 seconds
 		}
 
-		function resetAutoRotate() {
-			clearInterval(autoRotateInterval);
-			autoRotateInterval = setInterval(showNext, 10000); // 10 seconds
-		}
-
-		function showNext() {
+		showNext() {
+			const cards = this.container.querySelectorAll('project-card');
 			if (cards.length > 0) {
-				currentIndex = (currentIndex + 1) % cards.length;
-				updateCards();
-				resetAutoRotate();
+				this.currentIndex = (this.currentIndex + 1) % cards.length;
+				this.updateCards();
 			}
 		}
 
-		function showPrev() {
+		showPrev() {
+			const cards = this.container.querySelectorAll('project-card');
 			if (cards.length > 0) {
-				currentIndex = (currentIndex - 1 + cards.length) % cards.length;
-				updateCards();
-				resetAutoRotate();
+				this.currentIndex = (this.currentIndex - 1 + cards.length) % cards.length;
+				this.updateCards();
 			}
 		}
 
-		function requestFullscreen() {
+		async onLoad() {
+			const pathParts = window.location.pathname.split('/');
+			const eventID = pathParts[pathParts.indexOf('event') + 1];
+			if (eventID) {
+				await this.renderProjects(eventID);
+				setInterval(async () => {
+					await this.renderProjects(eventID);
+				}, 5000);
+			}
+		}
+
+		requestFullscreen() {
 			const elem = document.documentElement;
 			if (elem.requestFullscreen) {
 				elem.requestFullscreen();
@@ -109,54 +192,68 @@
 			}
 		}
 
-		updateCards();
-		resetAutoRotate();
-		document.body.addEventListener('click', requestFullscreen, {once: true});
-
-		// Scroll handling
-		let scrollTimeout;
-		window.addEventListener('wheel', (event) => {
+		handleWheel(event) {
 			if (window.innerWidth - event.clientX < 200) { // Detect scroll on the right side
 				event.preventDefault();
-				clearTimeout(scrollTimeout);
-				scrollTimeout = setTimeout(() => {
+				clearTimeout(this.scrollTimeout);
+				this.scrollTimeout = setTimeout(() => {
 					if (event.deltaY > 0) {
-						showNext();
+						this.showNext();
 					} else {
-						showPrev();
+						this.showPrev();
 					}
 				}, 50); // Debounce scroll events
 			}
-		}, {passive: false});
+		}
 
-		document.addEventListener('keydown', (event) => {
+		handleKeyDown(event) {
 			if (event.key === 'ArrowRight') {
-				showNext();
+				this.showNext();
 			} else if (event.key === 'ArrowLeft') {
-				showPrev();
-			}
-		});
-
-		const carousel = document.querySelector('.card-carousel');
-		let touchStartX = 0;
-		let touchEndX = 0;
-
-		carousel.addEventListener('touchstart', (event) => {
-			touchStartX = event.changedTouches[0].screenX;
-		}, {passive: true});
-
-		carousel.addEventListener('touchend', (event) => {
-			touchEndX = event.changedTouches[0].screenX;
-			handleSwipe();
-		}, {passive: true});
-
-		function handleSwipe() {
-			const swipeThreshold = 50; // Minimum distance for a swipe
-			if (touchStartX - touchEndX > swipeThreshold) {
-				showNext();
-			} else if (touchEndX - touchStartX > swipeThreshold) {
-				showPrev();
+				this.showPrev();
 			}
 		}
-	});
+
+		handleTouchStart(event) {
+			this.touchStartX = event.changedTouches[0].screenX;
+		}
+
+		handleTouchEnd(event) {
+			this.touchEndX = event.changedTouches[0].screenX;
+			this.handleSwipe();
+		}
+
+		handleSwipe() {
+			const swipeThreshold = 50; // Minimum distance for a swipe
+			if (this.touchStartX - this.touchEndX > swipeThreshold) {
+				this.showNext();
+			} else if (this.touchEndX - this.touchStartX > swipeThreshold) {
+				this.showPrev();
+			}
+		}
+
+		async renderProjects(eventID) {
+			const container = this.shadowRoot.getElementById('projects-container');
+			const cards = container.querySelectorAll('project-card');
+			const existingCards = new Map(Array.from(cards).map(card => [card.getAttribute('url'), card]));
+			const projects = await fetchProjects(eventID);
+			projects.forEach((project) => {
+				let card = existingCards.get(project.url);
+				if (!card) {
+					card = document.createElement('project-card');
+					card = container.appendChild(card);
+				} else {
+					existingCards.delete(project.url);
+				}
+				const raw = JSON.stringify(project);
+				if (card.getAttribute('data-json') !== raw) {
+					card.setAttribute('data-json', raw);
+				}
+			});
+			// Remove old cards
+			existingCards.forEach(card => card.remove());
+		}
+	}
+
+	customElements.define('project-card-carousel', Carousel);
 </script>
