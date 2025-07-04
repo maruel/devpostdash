@@ -16,7 +16,10 @@
 			} else {
 				existingCards.delete(project.url);
 			}
-			card.setAttribute('data-json', JSON.stringify(project));
+			const raw = JSON.stringify(project);
+			if (card.getAttribute('data-json') !== raw) {
+				card.setAttribute('data-json', raw);
+			}
 		});
 		// Remove old cards
 		existingCards.forEach(card => card.remove());
@@ -30,7 +33,10 @@
 			const project = await fetchProject(eventID, key.id);
 			const card = document.querySelector(`project-card[url=\"${project.url}\"]`);
 			if (card) {
-				card.setAttribute('data-json', JSON.stringify(project));
+				const raw = JSON.stringify(project);
+				if (card.getAttribute('data-json') !== raw) {
+					card.setAttribute('data-json', raw);
+				}
 			}
 		}));
 	}
