@@ -1,0 +1,159 @@
+<style>
+  .card-carousel {
+		position: relative;
+		width: 100vw;
+		height: 80vh;
+		perspective: 1000px;
+		display: flex;
+		justify-content: center;
+		align-items: center;
+	}
+
+	project-card {
+		position: absolute;
+		width: 400px;
+		height: 70vh;
+		max-height: 500px;
+		transition: transform 0.8s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.8s;
+		transform-style: preserve-3d;
+		opacity: 0;
+		transform: translateZ(-200px) rotateY(0deg);
+	}
+
+	project-card.active {
+		opacity: 1;
+		transform: translateZ(0) rotateY(0deg);
+		z-index: 10;
+	}
+
+	project-card.next {
+		opacity: 0.5;
+		transform: translateX(50%) translateZ(-100px) rotateY(-45deg);
+		z-index: 5;
+	}
+
+	project-card.prev {
+		opacity: 0.5;
+		transform: translateX(-50%) translateZ(-100px) rotateY(45deg);
+		z-index: 5;
+	}
+
+	@media screen and (orientation: portrait) {
+		project-card {
+			width: 80vw;
+		}
+
+		project-card.next {
+			transform: translateX(30%) translateZ(-100px) rotateY(-45deg);
+		}
+
+		project-card.prev {
+			transform: translateX(-30%) translateZ(-100px) rotateY(45deg);
+		}
+	}
+</style>
+<div class="card-carousel" id="projects-container">
+  {{range .Projects}}
+  <project-card url="{{.URL}}" project-id="{{.ID}}" title="{{.Title}}" {{if .Winner}}winner{{end}} tagline="{{.Tagline}}" likes="{{.Likes}}" team='{{.TeamJSON}}'>
+  </project-card>
+  {{end}}
+</div>
+<script>
+  'use strict';
+	document.addEventListener('DOMContentLoaded', () => {
+		const cards = document.querySelectorAll('project-card');
+		let currentIndex = 0;
+		let autoRotateInterval;
+
+		function updateCards() {
+			cards.forEach((card, index) => {
+				card.classList.remove('active', 'prev', 'next');
+				if (index === currentIndex) {
+					card.classList.add('active');
+				} else if (index === (currentIndex + 1) % cards.length) {
+					card.classList.add('next');
+				} else if (index === (currentIndex - 1 + cards.length) % cards.length) {
+					card.classList.add('prev');
+				}
+			});
+		}
+
+		function resetAutoRotate() {
+			clearInterval(autoRotateInterval);
+			autoRotateInterval = setInterval(showNext, 10000); // 10 seconds
+		}
+
+		function showNext() {
+			currentIndex = (currentIndex + 1) % cards.length;
+			updateCards();
+			resetAutoRotate();
+		}
+
+		function showPrev() {
+			currentIndex = (currentIndex - 1 + cards.length) % cards.length;
+			updateCards();
+			resetAutoRotate();
+		}
+
+		function requestFullscreen() {
+			const elem = document.documentElement;
+			if (elem.requestFullscreen) {
+				elem.requestFullscreen();
+			} else if (elem.webkitRequestFullscreen) { // Safari
+				elem.webkitRequestFullscreen();
+			}
+		}
+
+		if (cards.length > 0) {
+			updateCards();
+			resetAutoRotate();
+			document.body.addEventListener('click', requestFullscreen, {once: true});
+		}
+
+		// Scroll handling
+		let scrollTimeout;
+		window.addEventListener('wheel', (event) => {
+			if (window.innerWidth - event.clientX < 200) { // Detect scroll on the right side
+				event.preventDefault();
+				clearTimeout(scrollTimeout);
+				scrollTimeout = setTimeout(() => {
+					if (event.deltaY > 0) {
+						showNext();
+					} else {
+						showPrev();
+					}
+				}, 50); // Debounce scroll events
+			}
+		}, {passive: false});
+
+		document.addEventListener('keydown', (event) => {
+			if (event.key === 'ArrowRight') {
+				showNext();
+			} else if (event.key === 'ArrowLeft') {
+				showPrev();
+			}
+		});
+
+		const carousel = document.querySelector('.card-carousel');
+		let touchStartX = 0;
+		let touchEndX = 0;
+
+		carousel.addEventListener('touchstart', (event) => {
+			touchStartX = event.changedTouches[0].screenX;
+		}, {passive: true});
+
+		carousel.addEventListener('touchend', (event) => {
+			touchEndX = event.changedTouches[0].screenX;
+			handleSwipe();
+		}, {passive: true});
+
+		function handleSwipe() {
+			const swipeThreshold = 50; // Minimum distance for a swipe
+			if (touchStartX - touchEndX > swipeThreshold) {
+				showNext();
+			} else if (touchEndX - touchStartX > swipeThreshold) {
+				showPrev();
+			}
+		}
+	});
+</script>
