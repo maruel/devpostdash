@@ -58,7 +58,7 @@ func (s *webserver) handleEventRedirect(w http.ResponseWriter, r *http.Request) 
 
 func handleError(ctx context.Context, w http.ResponseWriter, err error) {
 	slog.ErrorContext(ctx, "web", "err", err)
-	var herr *devpost.HttpError
+	var herr *devpost.HTTPError
 	if errors.As(err, &herr) {
 		w.WriteHeader(herr.StatusCode)
 		_, _ = w.Write(herr.Body)
@@ -147,7 +147,7 @@ func (s *webserver) apiRoast(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	if err := json.NewDecoder(r.Body).Decode(&roastReq); err != nil {
-		handleError(ctx, w, &devpost.HttpError{StatusCode: http.StatusBadRequest, Body: []byte(err.Error())})
+		handleError(ctx, w, &devpost.HTTPError{StatusCode: http.StatusBadRequest, Body: []byte(err.Error())})
 		return
 	}
 	p, err := s.getProject(ctx, roastReq.EventID, roastReq.ProjectID)
@@ -179,7 +179,7 @@ func (s *webserver) getProject(ctx context.Context, eventID, projectID string) (
 		}
 	}
 	if p == nil {
-		return nil, &devpost.HttpError{
+		return nil, &devpost.HTTPError{
 			StatusCode: http.StatusNotFound,
 			Body:       []byte(fmt.Sprintf("project %q not found", eventID+"/"+projectID)),
 		}

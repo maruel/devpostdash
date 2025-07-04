@@ -114,7 +114,7 @@ func (d *client) get(ctx context.Context, url string) ([]byte, error) {
 		return nil, err
 	}
 	if resp.StatusCode != 200 {
-		err = &HttpError{StatusCode: resp.StatusCode, Body: bod}
+		err = &HTTPError{StatusCode: resp.StatusCode, Body: bod}
 	}
 	return bod, err
 }
@@ -175,6 +175,7 @@ func (d *client) FetchProject(ctx context.Context, project *Project) error {
 		project.Description = dom.NodeText(d)
 		project.DescriptionMD = dom.NodeMarkdown(d)
 	}
+	project.Tags = nil
 	if d := dom.FirstChild(doc, dom.Tag("div"), dom.ID("built-with")); d != nil {
 		for c := range dom.YieldChildren(d, dom.Tag("span"), dom.Class("cp-tag")) {
 			project.Tags = append(project.Tags, dom.NodeText(c))
@@ -198,6 +199,9 @@ type cachedClient struct {
 }
 
 func NewCached(parentCtx context.Context, d Client, freshness, autoRefresh time.Duration, cacheFilePath string) (Client, error) {
+	if freshness <= autoRefresh {
+		return nil, fmt.Errorf("freshness must be less than autoRefresh")
+	}
 	ctx, cancel := context.WithCancel(parentCtx)
 	c := &cachedClient{
 		d:           d,
@@ -217,7 +221,9 @@ func NewCached(parentCtx context.Context, d Client, freshness, autoRefresh time.
 
 func (c *cachedClient) loadCache() error {
 	f, err := os.Open(c.cacheFile)
-	defer slog.InfoContext(c.ctx, "devpost", "msg", "loaded cache", "err", err, "path", c.cacheFile)
+	defer func() {
+		slog.InfoContext(c.ctx, "devpost", "msg", "loaded cache", "err", err, "path", c.cacheFile, "events", len(c.events))
+	}()
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -242,43 +248,63 @@ func (c *cachedClient) Close() error {
 
 func (c *cachedClient) saveCache() error {
 	f, err := os.Create(c.cacheFile)
-	defer slog.InfoContext(c.ctx, "devpost", "msg", "saved cache", "err", err)
+	defer func() {
+		slog.InfoContext(c.ctx, "devpost", "msg", "saved cache", "err", err, "events", len(c.events))
+	}()
 	if err != nil {
 		return err
 	}
 	defer f.Close()
+	e := json.NewEncoder(f)
+	e.SetIndent("", "  ")
+
 	c.mu.Lock()
 	data := serializedCache{Version: 1, Events: c.events}
-	err = json.NewEncoder(f).Encode(&data)
+	err = e.Encode(&data)
 	c.mu.Unlock()
 	return err
 }
 
 func (c *cachedClient) autoRefreshLoop() {
-	ticker := time.NewTicker(c.autoRefresh)
+	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-c.ctx.Done():
 			return
 		case <-ticker.C:
-			var eventIDsToRefresh []string
+			eventID := ""
+			var p *Project
 			c.mu.Lock()
-			for eventID, event := range c.events {
-				if time.Since(event.LastRefresh) > c.autoRefresh {
-					eventIDsToRefresh = append(eventIDsToRefresh, eventID)
+			for id, event := range c.events {
+				if since := time.Since(event.LastRefresh); since > c.autoRefresh {
+					eventID = id
+					break
+				}
+				for _, project := range event.Projects {
+					if since := time.Since(project.LastRefresh); since > c.autoRefresh {
+						p = project
+						break
+					}
+				}
+				if p != nil {
+					break
 				}
 			}
 			c.mu.Unlock()
 
-			for _, eventID := range eventIDsToRefresh {
+			if p != nil {
+				slog.InfoContext(c.ctx, "devpost", "msg", "auto-refreshing project", "projectID", p.ID)
+				if err := c.fetchProject(c.ctx, p); err != nil {
+					slog.ErrorContext(c.ctx, "devpost", "msg", "failed to auto-refresh project", "projectID", p.ID, "err", err)
+				}
+			} else if eventID != "" {
 				slog.InfoContext(c.ctx, "devpost", "msg", "auto-refreshing event", "eventID", eventID)
-				go func(eventID string) {
-					_, err := c.FetchProjects(c.ctx, eventID)
-					if err != nil {
-						slog.ErrorContext(c.ctx, "devpost", "msg", "failed to auto-refresh event", "eventID", eventID, "err", err)
-					}
-				}(eventID)
+				if _, err := c.fetchProjects(c.ctx, eventID); err != nil {
+					slog.ErrorContext(c.ctx, "devpost", "msg", "failed to auto-refresh event", "eventID", eventID, "err", err)
+				}
+			} else {
+				// slog.InfoContext(c.ctx, "devpost", "msg", "nothing to refresh")
 			}
 		}
 	}
@@ -291,19 +317,18 @@ func (c *cachedClient) FetchProjects(ctx context.Context, eventID string) ([]*Pr
 	if e != nil && time.Since(e.LastRefresh) < c.freshness {
 		return e.Projects, nil
 	}
+	return c.fetchProjects(ctx, eventID)
+}
 
+func (c *cachedClient) fetchProjects(ctx context.Context, eventID string) ([]*Project, error) {
 	projects, err := c.d.FetchProjects(ctx, eventID)
 	if err != nil {
-		// If we have stale data, it's better to return it than nothing.
-		if e != nil {
-			return e.Projects, err
-		}
 		return nil, err
 	}
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	e = c.events[eventID]
+	e := c.events[eventID]
 	if e != nil {
 		// There's an existing list of projects. Merge the new list into it.
 		// Create a map of old projects for efficient lookup.
@@ -321,6 +346,9 @@ func (c *cachedClient) FetchProjects(ctx context.Context, eventID string) ([]*Pr
 				p.LastRefresh = old.LastRefresh
 			}
 		}
+	} else {
+		e = &Event{ID: eventID}
+		c.events[eventID] = e
 	}
 	e.Projects = projects
 	e.LastRefresh = time.Now()
@@ -331,6 +359,10 @@ func (c *cachedClient) FetchProject(ctx context.Context, project *Project) error
 	if time.Since(project.LastRefresh) < c.freshness {
 		return nil
 	}
+	return c.fetchProject(ctx, project)
+}
+
+func (c *cachedClient) fetchProject(ctx context.Context, project *Project) error {
 	err := c.d.FetchProject(ctx, project)
 	if err == nil {
 		project.LastRefresh = time.Now()
@@ -398,11 +430,11 @@ func parseProjectNode(n *html.Node) Project {
 	return p
 }
 
-type HttpError struct {
+type HTTPError struct {
 	StatusCode int
 	Body       []byte
 }
 
-func (e *HttpError) Error() string {
+func (e *HTTPError) Error() string {
 	return fmt.Sprintf("status %d: %s", e.StatusCode, e.Body)
 }

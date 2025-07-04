@@ -2,20 +2,6 @@
 <script>
   'use strict';
 
-	async function fetchProjects(eventID) {
-		try {
-			const response = await fetch(`/api/events/${eventID}`);
-			if (!response.ok) {
-				throw new Error(`HTTP error! status: ${response.status}`);
-			}
-			return await response.json();
-		} catch (error) {
-			console.error('Error fetching project IDs:', error);
-			location.reload();
-			return [];
-		}
-	}
-
 	async function renderProjects(eventID) {
 		const container = document.getElementById('projects-container');
 		const existingCards = new Map(Array.from(container.children).map(card => [card.getAttribute('url'), card]));
@@ -51,12 +37,7 @@
 	async function renderProjectDetails(projects, eventID) {
 		// Second pass: Fetch detailed information and update existing cards
 		await Promise.all(projects.map(async (key) => {
-			const detailResponse = await fetch(`/api/events/${eventID}/${key.id}`);
-			if (!detailResponse.ok) {
-				console.error(`HTTP error! status: ${detailResponse.status} for project id: ${key.id}`);
-				return null;
-			}
-			const project = await detailResponse.json();
+			const project = await fetchProject(eventiID, key.id);
 			const card = document.querySelector(`project-card[url="${project.url}"]`);
 			if (card) {
 				card.setAttribute('title', project.title);
@@ -87,3 +68,4 @@
 		}
 	});
 </script>
+{{template "partial_api.html" .}}

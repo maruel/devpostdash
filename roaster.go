@@ -42,7 +42,9 @@ func newRoaster(c genai.ProviderGen, cacheFile string) (*roaster, error) {
 
 func (r *roaster) loadCache() error {
 	f, err := os.Open(r.cacheFile)
-	defer slog.Info("web", "msg", "loaded cache", "err", err, "path", r.cacheFile)
+	defer func() {
+		slog.Info("web", "msg", "loaded cache", "err", err, "path", r.cacheFile, "roasts", len(r.roasts))
+	}()
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -62,13 +64,20 @@ func (r *roaster) loadCache() error {
 
 func (r *roaster) Close() error {
 	f, err := os.Create(r.cacheFile)
-	defer slog.Info("web", "msg", "saved cache", "err", err)
+	defer func() {
+		slog.Info("web", "msg", "saved cache", "err", err, "roasts", len(r.roasts))
+	}()
 	if err != nil {
 		return err
 	}
 	defer f.Close()
+	e := json.NewEncoder(f)
+	e.SetIndent("", "  ")
+
+	r.mu.Lock()
 	data := serializedRoaster{Version: 1, Roasts: r.roasts}
-	err = json.NewEncoder(f).Encode(&data)
+	err = e.Encode(&data)
+	r.mu.Unlock()
 	return err
 }
 

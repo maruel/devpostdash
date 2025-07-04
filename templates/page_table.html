@@ -84,7 +84,11 @@
         {{end}}
       </td>
       <td>{{.Likes}}</td>
-      <td>{{range $i, $tag := .Tags}}{{if $i}}, {{end}}{{$tag}}{{end}}</td>
+      <td>
+        <div class="tags">
+          {{range .Tags}}<span class="cp-tag">{{.}}</span>{{end}}
+        </div>
+      </td>
     </tr>
     {{end}}
   </tbody>
@@ -159,5 +163,5 @@
 		sortTableByLikes();
 	});
 </script>
-{{template "partial_projects.html" .}}
+{{template "partial_api.html" .}}
 {{template "webcomponent_team_member.html" .}}
