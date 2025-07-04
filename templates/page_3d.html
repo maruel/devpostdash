@@ -10,8 +10,7 @@
 		/* Hide body scrollbars */
 	}
 </style>
-
-
+<div id="projects-container"></div>
 <script type="importmap">
   {
 		"imports": {
@@ -502,7 +501,5 @@
 	previousTime = document.timeline.currentTime;
 	animate(previousTime);
 </script>
-{{template "webcomponent_project_carousel.html" .}}
-
 {{template "partial_projects.html" .}}
-{{template "webcomponent_project_card.html" .}}
+{{template "webcomponent_project_carousel.html" .}}

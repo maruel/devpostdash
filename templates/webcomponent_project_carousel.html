@@ -84,15 +84,19 @@
 		}
 
 		function showNext() {
-			currentIndex = (currentIndex + 1) % cards.length;
-			updateCards();
-			resetAutoRotate();
+			if (cards.length > 0) {
+				currentIndex = (currentIndex + 1) % cards.length;
+				updateCards();
+				resetAutoRotate();
+			}
 		}
 
 		function showPrev() {
-			currentIndex = (currentIndex - 1 + cards.length) % cards.length;
-			updateCards();
-			resetAutoRotate();
+			if (cards.length > 0) {
+				currentIndex = (currentIndex - 1 + cards.length) % cards.length;
+				updateCards();
+				resetAutoRotate();
+			}
 		}
 
 		function requestFullscreen() {
@@ -104,11 +108,9 @@
 			}
 		}
 
-		if (cards.length > 0) {
-			updateCards();
-			resetAutoRotate();
-			document.body.addEventListener('click', requestFullscreen, {once: true});
-		}
+		updateCards();
+		resetAutoRotate();
+		document.body.addEventListener('click', requestFullscreen, {once: true});
 
 		// Scroll handling
 		let scrollTimeout;
@@ -157,3 +159,4 @@
 		}
 	});
 </script>
+{{template "webcomponent_project_card.html" .}}
