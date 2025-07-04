@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -21,6 +22,7 @@ import (
 type Roast struct {
 	Content     string    `json:"content"`
 	LastRefresh time.Time `json:"last_refresh"`
+	Hash        string    `json:"hash"`
 }
 
 type roaster struct {
@@ -69,21 +71,37 @@ func (r *roaster) Close() error {
 	return err
 }
 
+const (
+	hardRoast = "Roast the following project. Be funny and concise. Reply with only one hard hitting sentence, nothing else."
+	softRoast = "Roast the following project. Be funny and concise. Reply with only one lighthearted sentence, nothing else."
+)
+
 func (r *roaster) doRoast(ctx context.Context, p *Project) (string, error) {
 	r.mu.Lock()
 	roast := r.roasts[p.ID]
 	r.mu.Unlock()
 
-	if roast == nil {
+	// Roast again whenever the project properties have changed.
+	if ph := p.Hash(); roast == nil || ph != roast.Hash {
 		teamNames := make([]string, len(p.Team))
 		for i, p := range p.Team {
 			teamNames[i] = p.Name
 		}
+		roastType := softRoast
+		if slices.Contains(p.Tags, "roast") {
+			roastType = hardRoast
+		}
+		winner := ""
+		if p.Winner {
+			winner = "The team is a winner from the competition.\n"
+		}
 		prompt := fmt.Sprintf(
-			"Roast the following project. Be funny and concise. Reply with only one hard hitting sentence, nothing else.\nProject name: %s\nTag line: %s\nTeam members: %s\nTags: %s\nWhole Description:\n%s",
+			"%s\nProject name: %s\nTag line: %s\nTeam members: %s\n%sTags: %s\nWhole Description:\n%s",
+			roastType,
 			p.Title,
 			p.Tagline,
 			strings.Join(teamNames, ", "),
+			winner,
 			strings.Join(p.Tags, ", "),
 			p.Description)
 		msgs := genai.Messages{genai.NewTextMessage(genai.User, prompt)}
@@ -95,6 +113,7 @@ func (r *roaster) doRoast(ctx context.Context, p *Project) (string, error) {
 		if roast.Content == "" {
 			return "", errors.New("no content generated")
 		}
+		roast.Hash = ph
 		slog.InfoContext(ctx, "roast", "content", roast)
 		r.mu.Lock()
 		r.roasts[p.ID] = roast

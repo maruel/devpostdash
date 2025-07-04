@@ -225,7 +225,8 @@ func mainImpl() error {
 	if err != nil {
 		return err
 	}
-	d, err := newCachedDevpostClient(ctx, rawDevpostClient, 5*time.Minute, 10*time.Minute, filepath.Join(cacheDir, "devpost.json"))
+	// Refresh every 5 minutes, and cache for 1 hour.
+	d, err := newCachedDevpostClient(ctx, rawDevpostClient, 5*time.Minute, 1*time.Hour, filepath.Join(cacheDir, "devpost.json"))
 	if err != nil {
 		return err
 	}
