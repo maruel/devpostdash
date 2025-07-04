@@ -86,20 +86,10 @@ func (s *webserver) handleEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	projects, err := s.d.FetchProjects(ctx, eventID)
+	out, err := s.getProjects(ctx, eventID)
 	if err != nil {
 		handleError(ctx, w, err)
 		return
-	}
-	// Not really necessary?
-	sort.Slice(projects, func(i, j int) bool {
-		return projects[i].Likes > projects[j].Likes
-	})
-	out := make([]*devpost.Project, 0, len(projects))
-	for _, p := range projects {
-		p2 := *p
-		p2.LastRefresh = time.Time{}
-		out = append(out, &p2)
 	}
 	data := map[string]any{
 		"Title":    eventID,
@@ -114,16 +104,10 @@ func (s *webserver) handleEvent(w http.ResponseWriter, r *http.Request) {
 func (s *webserver) apiEvent(w http.ResponseWriter, r *http.Request) {
 	eventID := r.PathValue("eventID")
 	ctx := r.Context()
-	projects, err := s.d.FetchProjects(ctx, eventID)
+	out, err := s.getProjects(ctx, eventID)
 	if err != nil {
 		handleError(ctx, w, err)
 		return
-	}
-	out := make([]*devpost.Project, 0, len(projects))
-	for _, p := range projects {
-		p2 := *p
-		p2.LastRefresh = time.Time{}
-		out = append(out, &p2)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(out); err != nil {
@@ -157,7 +141,49 @@ func (s *webserver) apiRoast(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *webserver) getProjects(ctx context.Context, eventID string) ([]*devpost.Project, error) {
+	projects, err := s.d.FetchProjects(ctx, eventID)
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(projects, func(i, j int) bool {
+		return projects[i].Likes > projects[j].Likes
+	})
+	out := make([]*devpost.Project, 0, len(projects))
+	for _, p := range projects {
+		p2 := *p
+		p2.LastRefresh = time.Time{}
+		out = append(out, &p2)
+	}
+	if len(out) == 0 {
+		out = []*devpost.Project{&devpostProject}
+	}
+	return out, nil
+}
+
+var devpostProject = devpost.Project{
+	ID:        "0",
+	ShortName: "devpostdash",
+	Title:     "Devpost Dashboard",
+	Tagline:   "Awesome dashboard for our hackathon",
+	URL:       "https://github.com/maruel/devpostdash",
+	Winner:    true,
+	Team: []devpost.Person{
+		{
+			Name:      "Marc-Antoine Ruel",
+			URL:       "https://devpost.com/maruel",
+			AvatarURL: "https://lh3.googleusercontent.com/a/ACg8ocLSOzFuWl-UhprsbeOvk-eYdoA-HngsePYGLguoUpKxO9dI-XLmzA=s96-c",
+		},
+	},
+	Likes:       31337,
+	Tags:        []string{"devpost", "dashboard", "roast"},
+	Description: "This project fetches the data from devpost.com using webscraping. This is because devpost.com has no API. This is a bit frustrating. The server presents a nice interactive web UI that can be used during competitions.",
+}
+
 func (s *webserver) getProject(ctx context.Context, eventID, projectID string) (*devpost.Project, error) {
+	if projectID == "0" {
+		return &devpostProject, nil
+	}
 	projects, err := s.d.FetchProjects(ctx, eventID)
 	if err != nil {
 		return nil, err
