@@ -202,7 +202,7 @@
 				tagsContainer.removeChild(tagsContainer.firstChild);
 			} // Clear existing tags
 			try {
-				(data.Tags || []).forEach(tag => {
+				(data.tags || []).forEach(tag => {
 					const tagSpan = document.createElement('span');
 					tagSpan.textContent = tag;
 					tagSpan.classList.add('cp-tag');
