@@ -49,7 +49,7 @@ type Project struct {
 	DescriptionMD string   `json:"description_md"`
 	Tags          []string `json:"tags"`
 
-	LastRefresh time.Time `json:"last_refresh"`
+	LastRefresh time.Time `json:"last_refresh,omitzero"`
 }
 
 func (p *Project) Hash() string {
@@ -63,7 +63,7 @@ func (p *Project) Hash() string {
 type Event struct {
 	ID            string     `json:"id"`
 	Projects      []*Project `json:"projects"`
-	LastRefresh   time.Time  `json:"last_refresh"`
+	LastRefresh   time.Time  `json:"last_refresh,omitzero"`
 	LastRequested time.Time  `json:"last_requested,omitzero"`
 }
 
