@@ -63,6 +63,9 @@
 </style>
 <h1>{{.Title}}</h1>
 <div class="project-container" id="projects-container">
+  {{range .Projects}}
+  <project-card data-json='{{jsonMarshal .}}'></project-card>
+  {{end}}
 </div>
 <p class="github-link">
   <a href="https://github.com/maruel/devpostdash">github.com/maruel/devpostdash</a>
