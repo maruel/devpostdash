@@ -72,31 +72,9 @@
 </p>
 <script>
   'use strict';
-	let observer;
-
-	function sortCards() {
-		const container = document.getElementById('projects-container');
-		// Disconnect the observer to prevent re-triggering during reordering
-		if (observer) {
-			observer.disconnect();
-		}
-		const projectCards = Array.from(container.querySelectorAll('project-card'));
-		projectCards.sort((a, b) => {
-			return b.likes - a.likes;
-		});
-		projectCards.forEach(card => {
-			container.appendChild(card);
-		});
-		// Reconnect the observer after reordering is complete
-		if (observer) {
-			observer.observe(container, {childList: true, subtree: true, attributes: true, attributeFilter: ['data-json']});
-		}
-	}
-
 	document.addEventListener('DOMContentLoaded', () => {
-		sortCards(); // Initial sort on load
-		const projectsContainer = document.getElementById('projects-container');
-		observer = new MutationObserver((mutationsList, obs) => {
+		const container = document.getElementById('projects-container');
+		const observer = new MutationObserver((mutationsList, obs) => {
 			for (const mutation of mutationsList) {
 				if (mutation.type === 'childList' || (mutation.type === 'attributes' && mutation.attributeName === 'data-json')) {
 					sortCards();
@@ -104,7 +82,24 @@
 				}
 			}
 		});
-		observer.observe(projectsContainer, {childList: true, subtree: true, attributes: true, attributeFilter: ['data-json']});
+
+		function sortCards() {
+			// Disconnect the observer to prevent re-triggering during reordering
+			observer.disconnect();
+			const projectCards = Array.from(container.querySelectorAll('project-card'));
+			projectCards.sort((a, b) => {
+				return b.likes - a.likes;
+			});
+			projectCards.forEach(card => {
+				container.appendChild(card);
+			});
+			// Reconnect the observer after reordering is complete
+			observer.observe(container, {childList: true, subtree: true, attributes: true, attributeFilter: ['data-json']});
+		}
+
+		observer.observe(container, {childList: true, subtree: true, attributes: true, attributeFilter: ['data-json']});
+
+		sortCards();
 	});
 </script>
 {{template "partial_projects.html" .}}
