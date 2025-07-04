@@ -63,7 +63,7 @@ type Event struct {
 	ID            string     `json:"id"`
 	Projects      []*Project `json:"projects"`
 	LastRefresh   time.Time  `json:"last_refresh"`
-	LastRequested time.Time  `json:"last_requested,omitempty"`
+	LastRequested time.Time  `json:"last_requested,omitzero"`
 }
 
 type Client interface {

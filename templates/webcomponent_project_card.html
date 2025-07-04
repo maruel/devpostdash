@@ -169,7 +169,7 @@
 				avatarsContainer.removeChild(avatarsContainer.firstChild);
 			} // Clear existing avatars
 			try {
-				const team = JSON.parse(this.getAttribute('team') || '[]');
+				const team = JSON.parse(this.getAttribute('team')) || [];
 				team.forEach(member => {
 					const teamMember = document.createElement('team-member');
 					teamMember.setAttribute('avatar-url', member.avatar_url);
@@ -189,7 +189,7 @@
 				tagsContainer.removeChild(tagsContainer.firstChild);
 			} // Clear existing tags
 			try {
-				const tags = JSON.parse(this.getAttribute('tags') || '[]');
+				const tags = JSON.parse(this.getAttribute('tags')) || [];
 				tags.forEach(tag => {
 					const tagSpan = document.createElement('span');
 					tagSpan.textContent = tag;

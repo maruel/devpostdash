@@ -27,6 +27,9 @@
 				card.setAttribute('likes', project.likes);
 			}
 			card.setAttribute('team', JSON.stringify(project.team));
+			// They may not be present.
+			card.setAttribute('description', JSON.stringify(project.description || ''));
+			card.setAttribute('tags', JSON.stringify(project.tags || []));
 		});
 		// Remove old cards
 		existingCards.forEach(card => card.remove());
@@ -34,10 +37,11 @@
 		document.dispatchEvent(new CustomEvent('projectsRendered', {detail: projects}));
 	}
 
+	// TODO: Not sure it's necessary anymore.
 	async function renderProjectDetails(projects, eventID) {
 		// Second pass: Fetch detailed information and update existing cards
 		await Promise.all(projects.map(async (key) => {
-			const project = await fetchProject(eventiID, key.id);
+			const project = await fetchProject(eventID, key.id);
 			const card = document.querySelector(`project-card[url="${project.url}"]`);
 			if (card) {
 				card.setAttribute('title', project.title);
@@ -50,7 +54,7 @@
 				}
 				card.setAttribute('team', JSON.stringify(project.team || []));
 				card.setAttribute('description', JSON.stringify(project.description || ''));
-				card.setAttribute('tags', JSON.stringify(project.Tags || []));
+				card.setAttribute('tags', JSON.stringify(project.tags || []));
 			}
 		}));
 	}
