@@ -131,23 +131,6 @@ func (s *webserver) apiEvent(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *webserver) apiProject(w http.ResponseWriter, r *http.Request) {
-	projectID := r.PathValue("projectID")
-	eventID := r.PathValue("eventID")
-	ctx := r.Context()
-	p, err := s.getProject(ctx, eventID, projectID)
-	if err != nil {
-		handleError(ctx, w, err)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	p2 := *p
-	p2.LastRefresh = time.Time{}
-	if err := json.NewEncoder(w).Encode(&p2); err != nil {
-		handleError(ctx, w, err)
-	}
-}
-
 func (s *webserver) apiRoast(w http.ResponseWriter, r *http.Request) {
 	var roastReq struct {
 		EventID   string `json:"event_id"`
@@ -253,7 +236,6 @@ func newWebServerHandler(d devpost.Client, r *roaster) http.Handler {
 	mux.HandleFunc("GET /event/{eventID}", w.handleEventRedirect)
 	mux.HandleFunc("GET /event/{eventID}/{type}", w.handleEvent)
 	mux.HandleFunc("GET /api/events/{eventID}", w.apiEvent)
-	mux.HandleFunc("GET /api/events/{eventID}/{projectID}", w.apiProject)
 	mux.HandleFunc("POST /api/roast", w.apiRoast)
 	return loggingMiddleware(mux)
 }
