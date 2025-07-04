@@ -2,6 +2,7 @@
 // Use of this source code is governed under the Apache License, Version 2.0
 // that can be found in the LICENSE file.
 
+// Package devpost fetches the hackathon projects from devpost.com
 package devpost
 
 import (

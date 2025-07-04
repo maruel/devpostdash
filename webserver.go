@@ -95,10 +95,16 @@ func (s *webserver) handleEvent(w http.ResponseWriter, r *http.Request) {
 	sort.Slice(projects, func(i, j int) bool {
 		return projects[i].Likes > projects[j].Likes
 	})
+	out := make([]*devpost.Project, 0, len(projects))
+	for _, p := range projects {
+		p2 := *p
+		p2.LastRefresh = time.Time{}
+		out = append(out, &p2)
+	}
 	data := map[string]any{
 		"Title":    eventID,
 		"EventID":  eventID,
-		"Projects": projects,
+		"Projects": out,
 	}
 	if err := tmpl.Execute(w, data); err != nil {
 		handleError(ctx, w, err)
@@ -113,8 +119,14 @@ func (s *webserver) apiEvent(w http.ResponseWriter, r *http.Request) {
 		handleError(ctx, w, err)
 		return
 	}
+	out := make([]*devpost.Project, 0, len(projects))
+	for _, p := range projects {
+		p2 := *p
+		p2.LastRefresh = time.Time{}
+		out = append(out, &p2)
+	}
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(projects); err != nil {
+	if err := json.NewEncoder(w).Encode(out); err != nil {
 		handleError(ctx, w, err)
 	}
 }
@@ -129,7 +141,9 @@ func (s *webserver) apiProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(p); err != nil {
+	p2 := *p
+	p2.LastRefresh = time.Time{}
+	if err := json.NewEncoder(w).Encode(&p2); err != nil {
 		handleError(ctx, w, err)
 	}
 }
