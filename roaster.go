@@ -83,7 +83,7 @@ func (r *roaster) Close() error {
 
 const (
 	hardRoast = "Roast the following project. Be funny and concise. Reply with only one hard hitting sentence, nothing else."
-	softRoast = "Roast the following project. Be funny and concise. Reply with only one lighthearted sentence, nothing else."
+	softRoast = "Make a tag line for the following project. Be funny and concise. Reply with only one lighthearted sentence, nothing else."
 )
 
 func (r *roaster) doRoast(ctx context.Context, p *devpost.Project) (string, error) {
