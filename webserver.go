@@ -34,7 +34,7 @@ type webserver struct {
 func (s *webserver) handleRoot(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	ctx := r.Context()
-	if err := templates.Lookup("root.html").Execute(w, nil); err != nil {
+	if err := templates.Lookup("page_root.html").Execute(w, nil); err != nil {
 		handleError(ctx, w, err)
 	}
 }
@@ -42,7 +42,7 @@ func (s *webserver) handleRoot(w http.ResponseWriter, r *http.Request) {
 func (s *webserver) handleAbout(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	ctx := r.Context()
-	if err := templates.Lookup("about.html").Execute(w, nil); err != nil {
+	if err := templates.Lookup("page_about.html").Execute(w, nil); err != nil {
 		handleError(ctx, w, err)
 	}
 }
