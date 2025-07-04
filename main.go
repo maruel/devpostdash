@@ -252,7 +252,10 @@ func mainImpl() error {
 		if prov == nil {
 			return fmt.Errorf("unknown provider %q", *provider)
 		}
-		cl, err := prov(*model, nil)
+		f := func(h http.RoundTripper) http.RoundTripper {
+			return &roundtrippers.Throttle{Transport: h, QPS: 0.5}
+		}
+		cl, err := prov(*model, f)
 		if err != nil {
 			return err
 		}
