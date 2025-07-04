@@ -154,7 +154,7 @@
 		}
 
 		attributeChangedCallback(name, oldValue, newValue) {
-			if (oldValue !== newValue) {
+			if (name === 'data-json' && oldValue !== newValue) {
 				this._render();
 			}
 		}
@@ -174,17 +174,24 @@
 			this.shadowRoot.querySelector('#tagline-content').textContent = data.tagline || '';
 			this.shadowRoot.querySelector('#likes-content').textContent = data.likes || '';
 			const avatarsContainer = this.shadowRoot.querySelector('.team-avatars');
-			while (avatarsContainer.firstChild) {
-				avatarsContainer.removeChild(avatarsContainer.firstChild);
-			} // Clear existing avatars
-			try {
-				(data.team || []).forEach(member => {
-					const teamMember = document.createElement('team-member');
-					teamMember.setAttribute('data-json', JSON.stringify(member));
-					avatarsContainer.appendChild(teamMember);
-				});
-			} catch (e) {
-				console.error('Error parsing team attribute:', e);
+			const currentTeamMembers = Array.from(avatarsContainer.children);
+			const newTeamMembersData = data.team || [];
+			newTeamMembersData.forEach((memberData, index) => {
+				let elem = currentTeamMembers[index];
+				const raw = JSON.stringify(memberData);
+				if (elem) {
+					if (elem.getAttribute('data-json') !== raw) {
+						elem.setAttribute('data-json', raw);
+					}
+				} else {
+					elem = document.createElement('team-member');
+					elem.setAttribute('data-json', raw);
+					avatarsContainer.appendChild(elem);
+				}
+			});
+			// Remove old team members
+			for (let i = newTeamMembersData.length; i < currentTeamMembers.length; i++) {
+				avatarsContainer.removeChild(currentTeamMembers[i]);
 			}
 
 			// Do not show the description for now because it is too long.
