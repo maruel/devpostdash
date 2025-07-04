@@ -285,12 +285,37 @@ func (c *cachedDevpostClient) fetchProjects(ctx context.Context, eventID string)
 	}
 
 	projects, err := c.d.fetchProjects(ctx, eventID)
-	if err == nil {
-		c.mu.Lock()
-		c.events[eventID] = Event{ID: eventID, Projects: projects, LastRefresh: time.Now()}
-		c.mu.Unlock()
+	if err != nil {
+		// If we have stale data, it's better to return it than nothing.
+		if ok {
+			return e.Projects, err
+		}
+		return nil, err
 	}
-	return projects, err
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	e, ok = c.events[eventID]
+	if ok {
+		// There's an existing list of projects. Merge the new list into it.
+		// Create a map of old projects for efficient lookup.
+		oldProjects := make(map[string]*Project, len(e.Projects))
+		for _, p := range e.Projects {
+			oldProjects[p.ID] = p
+		}
+		// Update the project details.
+		for _, p := range projects {
+			if old, ok := oldProjects[p.ID]; ok {
+				// Copy over the fields that are not fetched by fetchProjects.
+				p.Description = old.Description
+				p.DescriptionMD = old.DescriptionMD
+				p.Tags = old.Tags
+				p.LastRefresh = old.LastRefresh
+			}
+		}
+	}
+	c.events[eventID] = Event{ID: eventID, Projects: projects, LastRefresh: time.Now()}
+	return projects, nil
 }
 
 func (c *cachedDevpostClient) fetchProject(ctx context.Context, project *Project) error {
