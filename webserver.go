@@ -67,10 +67,10 @@ func handleError(ctx context.Context, w http.ResponseWriter, err error) {
 
 func (s *webserver) handleEvent(w http.ResponseWriter, r *http.Request) {
 	eventID := r.PathValue("eventID")
-	t := r.PathValue("type")
-	switch t {
-	case "3d", "card", "cards", "table":
-	default:
+	pageType := r.PathValue("type")
+	// Load the corresponding page_TYPE.html page under templates/.
+	tmpl := templates.Lookup("page_" + pageType + ".html")
+	if tmpl == nil {
 		http.Redirect(w, r, "/event/"+eventID+"/card", http.StatusSeeOther)
 		return
 	}
@@ -104,7 +104,7 @@ func (s *webserver) handleEvent(w http.ResponseWriter, r *http.Request) {
 		"EventID":  eventID,
 		"Projects": templateProjects,
 	}
-	if err := templates.Lookup(t+".html").Execute(w, data); err != nil {
+	if err := tmpl.Execute(w, data); err != nil {
 		handleError(ctx, w, err)
 	}
 }
