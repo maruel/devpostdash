@@ -66,6 +66,7 @@
 <table border="1" id="projects-table">
   <thead>
     <tr>
+      <!--<th>Rank</th>-->
       <th>Title</th>
       <th>Tagline</th>
       <th>Team</th>
@@ -74,19 +75,20 @@
     </tr>
   </thead>
   <tbody>
-    {{range .Projects}}
+    {{range $i, $e := .Projects}}
     <tr>
-      <td><a href="{{.URL}}">{{.Title}}</a>{{if .Winner}} 🏆{{end}}</td>
-      <td>{{.Tagline}}</td>
+      <!--<td>{{$i}}</td> -->
+      <td><a href="{{$e.URL}}">{{$e.Title}}</a>{{if $e.Winner}} 🏆{{end}}</td>
+      <td>{{$e.Tagline}}</td>
       <td>
-        {{range .Team}}
+        {{range $e.Team}}
         <team-member data-json="{{jsonMarshal .}}"></team-member>
         {{end}}
       </td>
-      <td>{{.Likes}}</td>
+      <td>{{$e.Likes}}</td>
       <td>
         <div class="tags">
-          {{range .Tags}}<span class="cp-tag">{{.}}</span>{{end}}
+          {{range $e.Tags}}<span class="cp-tag">{{.}}</span>{{end}}
         </div>
       </td>
     </tr>
@@ -115,6 +117,9 @@
 		tableBody.innerHTML = '';
 		projectsData.forEach(project => {
 			const row = document.createElement('tr');
+			//const rankCell = document.createElement('td');
+			//rankCell.textContent = projectsData.indexOf(project) + 1;
+			//row.appendChild(rankCell);
 			const titleCell = document.createElement('td');
 			const titleLink = document.createElement('a');
 			titleLink.href = project.url;
