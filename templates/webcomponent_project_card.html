@@ -1,3 +1,4 @@
+{{template "webcomponent_team_member.html" .}}
 <template id="project-card-template">
   <style>
     :host {
@@ -136,16 +137,11 @@
 		}
 
 		get likes() {
-			return this.data.likes;
-		}
-
-		get url() {
-			return this.data.url;
+			return parseInt(this.data.likes || '0', 10);
 		}
 
 		connectedCallback() {
 			this._render();
-
 			const observer = new IntersectionObserver((entries, observer) => {
 				entries.forEach(entry => {
 					this._isIntersecting = entry.isIntersecting; // Update visibility flag
@@ -154,7 +150,6 @@
 					}
 				});
 			}, {threshold: 0.1}); // Trigger when 10% of the element is visible
-
 			observer.observe(this);
 		}
 
@@ -166,6 +161,8 @@
 
 		_render() {
 			const data = this.data;
+			// Shortcut to uniquely identify this card.
+			this.setAttribute('url', data.url || '');
 			this.shadowRoot.querySelector('h2 a').href = data.url || '';
 			this.shadowRoot.querySelector('#title-content').textContent = data.title || '';
 			const winnerSpan = this.shadowRoot.querySelector('.winner');
@@ -245,4 +242,3 @@
 
 	customElements.define('project-card', ProjectCard);
 </script>
-{{template "webcomponent_team_member.html" .}}

@@ -8,7 +8,9 @@
 			if (!response.ok) {
 				throw new Error(`failed to fetch event ${eventID}: status: ${response.status}`);
 			}
-			return await response.json();
+			const data = await response.json();
+			document.dispatchEvent(new CustomEvent('projectsRefreshed', {detail: data}));
+			return data;
 		} catch (error) {
 			console.error('Error fetching project IDs:', error);
 			location.reload();

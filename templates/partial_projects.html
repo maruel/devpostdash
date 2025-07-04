@@ -12,7 +12,7 @@
 			let card = existingCards.get(project.url);
 			if (!card) {
 				card = document.createElement('project-card');
-				container.appendChild(card);
+				card = container.appendChild(card);
 			} else {
 				existingCards.delete(project.url);
 			}
@@ -21,7 +21,6 @@
 		// Remove old cards
 		existingCards.forEach(card => card.remove());
 		await renderProjectDetails(projects, eventID);
-		document.dispatchEvent(new CustomEvent('projectsRendered', {detail: projects}));
 	}
 
 	// TODO: Not sure it's necessary anymore.

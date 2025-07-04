@@ -63,7 +63,7 @@
 	}
 </style>
 <h1>{{.Title}}</h1>
-<table border="1">
+<table border="1" id="projects-table">
   <thead>
     <tr>
       <th>Title</th>
@@ -98,7 +98,7 @@
 </p>
 <script>
   function sortTableByLikes() {
-		const tableBody = document.querySelector('table tbody');
+		const tableBody = document.querySelector('#projects-table tbody');
 		const rows = Array.from(tableBody.querySelectorAll('tr'));
 		rows.sort((a, b) => {
 			const likesA = parseInt(a.children[3].textContent || '0', 10);
@@ -109,12 +109,10 @@
 	}
 
 	document.addEventListener('DOMContentLoaded', sortTableByLikes);
-	document.addEventListener('projectsRendered', (event) => {
+	document.addEventListener('projectsRefreshed', (event) => {
 		const projectsData = event.detail;
-		const tableBody = document.querySelector('table tbody');
-		// Clear existing rows
+		const tableBody = document.querySelector('#projects-table tbody');
 		tableBody.innerHTML = '';
-		// Create and append new rows
 		projectsData.forEach(project => {
 			const row = document.createElement('tr');
 			const titleCell = document.createElement('td');
@@ -156,9 +154,18 @@
 			row.appendChild(tagsCell);
 			tableBody.appendChild(row);
 		});
-
-		// Now sort the newly rendered rows
 		sortTableByLikes();
+	});
+
+	window.addEventListener('load', async () => {
+		const pathParts = window.location.pathname.split('/');
+		const eventID = pathParts[pathParts.indexOf('event') + 1];
+		if (eventID) {
+			await fetchProjects(eventID);
+			setInterval(async () => {
+				await fetchProjects(eventID);
+			}, 30000);
+		}
 	});
 </script>
 {{template "partial_api.html" .}}

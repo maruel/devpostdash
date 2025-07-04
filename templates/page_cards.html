@@ -76,41 +76,35 @@
 
 	function sortCards() {
 		const container = document.getElementById('projects-container');
-		if (container) {
-			// Disconnect the observer to prevent re-triggering during reordering
-			if (observer) {
-				observer.disconnect();
-			}
-			const projectCards = Array.from(container.querySelectorAll('project-card'));
-			projectCards.sort((a, b) => {
-				const likesA = parseInt(a.getAttribute('likes') || '0', 10);
-				const likesB = parseInt(b.getAttribute('likes') || '0', 10);
-				return likesB - likesA; // Decreasing order
-			});
-			projectCards.forEach(card => {
-				container.appendChild(card);
-			});
-			// Reconnect the observer after reordering is complete
-			if (observer && container) {
-				observer.observe(container, {childList: true, subtree: true, attributes: true, attributeFilter: ['data-json']});
-			}
+		// Disconnect the observer to prevent re-triggering during reordering
+		if (observer) {
+			observer.disconnect();
+		}
+		const projectCards = Array.from(container.querySelectorAll('project-card'));
+		projectCards.sort((a, b) => {
+			return b.likes - a.likes;
+		});
+		projectCards.forEach(card => {
+			container.appendChild(card);
+		});
+		// Reconnect the observer after reordering is complete
+		if (observer) {
+			observer.observe(container, {childList: true, subtree: true, attributes: true, attributeFilter: ['data-json']});
 		}
 	}
 
 	document.addEventListener('DOMContentLoaded', () => {
 		sortCards(); // Initial sort on load
 		const projectsContainer = document.getElementById('projects-container');
-		if (projectsContainer) {
-			observer = new MutationObserver((mutationsList, obs) => {
-				for (const mutation of mutationsList) {
-					if (mutation.type === 'childList' || (mutation.type === 'attributes' && mutation.attributeName === 'data-json')) {
-						sortCards();
-						break; // Only need to sort once per batch of mutations
-					}
+		observer = new MutationObserver((mutationsList, obs) => {
+			for (const mutation of mutationsList) {
+				if (mutation.type === 'childList' || (mutation.type === 'attributes' && mutation.attributeName === 'data-json')) {
+					sortCards();
+					break; // Only need to sort once per batch of mutations
 				}
-			});
-			observer.observe(projectsContainer, {childList: true, subtree: true, attributes: true, attributeFilter: ['data-json']});
-		}
+			}
+		});
+		observer.observe(projectsContainer, {childList: true, subtree: true, attributes: true, attributeFilter: ['data-json']});
 	});
 </script>
 {{template "partial_projects.html" .}}
