@@ -33,19 +33,22 @@ type Person struct {
 }
 
 type Project struct {
-	ID            string    `json:"id"`
-	ShortName     string    `json:"short_name"`
-	Title         string    `json:"title"`
-	URL           string    `json:"url"`
-	Tagline       string    `json:"tagline"`
-	Image         string    `json:"image"`
-	Winner        bool      `json:"winner"`
-	Team          []Person  `json:"team"`
-	Description   string    `json:"description"`
-	DescriptionMD string    `json:"description_md"`
-	Likes         int       `json:"likes"`
-	Tags          []string  `json:"tags"`
-	LastRefresh   time.Time `json:"last_refresh"`
+	ID        string   `json:"id"`
+	ShortName string   `json:"short_name"`
+	Title     string   `json:"title"`
+	URL       string   `json:"url"`
+	Tagline   string   `json:"tagline"`
+	Image     string   `json:"image"`
+	Winner    bool     `json:"winner"`
+	Team      []Person `json:"team"`
+	Likes     int      `json:"likes"`
+
+	// These are loaded by fetchProject:
+	Description   string   `json:"description"`
+	DescriptionMD string   `json:"description_md"`
+	Tags          []string `json:"tags"`
+
+	LastRefresh time.Time `json:"last_refresh"`
 }
 
 func (p *Project) Hash() string {
@@ -183,7 +186,7 @@ type cachedDevpostClient struct {
 	cacheFile   string
 
 	mu     sync.Mutex
-	events map[string]Event
+	events map[string]*Event
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -196,7 +199,7 @@ func newCachedDevpostClient(parentCtx context.Context, d devpostClientInterface,
 		freshness:   freshness,
 		autoRefresh: autoRefresh,
 		cacheFile:   cacheFilePath,
-		events:      map[string]Event{},
+		events:      map[string]*Event{},
 		ctx:         ctx,
 		cancel:      cancel,
 	}
@@ -278,16 +281,16 @@ func (c *cachedDevpostClient) autoRefreshLoop() {
 
 func (c *cachedDevpostClient) fetchProjects(ctx context.Context, eventID string) ([]*Project, error) {
 	c.mu.Lock()
-	e, ok := c.events[eventID]
+	e := c.events[eventID]
 	c.mu.Unlock()
-	if ok && time.Since(e.LastRefresh) < c.freshness {
+	if e != nil && time.Since(e.LastRefresh) < c.freshness {
 		return e.Projects, nil
 	}
 
 	projects, err := c.d.fetchProjects(ctx, eventID)
 	if err != nil {
 		// If we have stale data, it's better to return it than nothing.
-		if ok {
+		if e != nil {
 			return e.Projects, err
 		}
 		return nil, err
@@ -295,8 +298,8 @@ func (c *cachedDevpostClient) fetchProjects(ctx context.Context, eventID string)
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	e, ok = c.events[eventID]
-	if ok {
+	e = c.events[eventID]
+	if e != nil {
 		// There's an existing list of projects. Merge the new list into it.
 		// Create a map of old projects for efficient lookup.
 		oldProjects := make(map[string]*Project, len(e.Projects))
@@ -314,7 +317,8 @@ func (c *cachedDevpostClient) fetchProjects(ctx context.Context, eventID string)
 			}
 		}
 	}
-	c.events[eventID] = Event{ID: eventID, Projects: projects, LastRefresh: time.Now()}
+	e.Projects = projects
+	e.LastRefresh = time.Now()
 	return projects, nil
 }
 
@@ -332,8 +336,8 @@ func (c *cachedDevpostClient) fetchProject(ctx context.Context, project *Project
 //
 
 type serializedDevpost struct {
-	Version int              `json:"version"`
-	Events  map[string]Event `json:"events"`
+	Version int               `json:"version"`
+	Events  map[string]*Event `json:"events"`
 }
 
 func parseProjects(r io.Reader) ([]*Project, error) {
