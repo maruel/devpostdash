@@ -200,8 +200,10 @@ func (s *webserver) getProject(ctx context.Context, eventID, projectID string) (
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
+		defer func() {
+			slog.InfoContext(r.Context(), "web", "path", r.URL.Path, "ip", getRealIP(r), "dur", time.Since(start))
+		}()
 		next.ServeHTTP(w, r)
-		slog.InfoContext(r.Context(), "web", "path", r.URL.Path, "ip", getRealIP(r), "dur", time.Since(start))
 	})
 }
 
