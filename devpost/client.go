@@ -60,9 +60,10 @@ func (p *Project) Hash() string {
 }
 
 type Event struct {
-	ID          string     `json:"id"`
-	Projects    []*Project `json:"projects"`
-	LastRefresh time.Time  `json:"last_refresh"`
+	ID            string     `json:"id"`
+	Projects      []*Project `json:"projects"`
+	LastRefresh   time.Time  `json:"last_refresh"`
+	LastRequested time.Time  `json:"last_requested,omitempty"`
 }
 
 type Client interface {
@@ -189,6 +190,7 @@ type cachedClient struct {
 	d           Client
 	freshness   time.Duration
 	autoRefresh time.Duration
+	stopRefresh time.Duration
 	cacheFile   string
 
 	mu     sync.Mutex
@@ -207,6 +209,7 @@ func NewCached(parentCtx context.Context, d Client, freshness, autoRefresh time.
 		d:           d,
 		freshness:   freshness,
 		autoRefresh: autoRefresh,
+		stopRefresh: 4 * time.Hour,
 		cacheFile:   cacheFilePath,
 		events:      map[string]*Event{},
 		ctx:         ctx,
@@ -277,6 +280,10 @@ func (c *cachedClient) autoRefreshLoop() {
 			var p *Project
 			c.mu.Lock()
 			for id, event := range c.events {
+				// Do not auto-refresh events that have not been requested in a while.
+				if !event.LastRequested.IsZero() && time.Since(event.LastRequested) > c.stopRefresh {
+					continue
+				}
 				if since := time.Since(event.LastRefresh); since > c.autoRefresh {
 					eventID = id
 					break
@@ -303,8 +310,6 @@ func (c *cachedClient) autoRefreshLoop() {
 				if _, err := c.fetchProjects(c.ctx, eventID); err != nil {
 					slog.ErrorContext(c.ctx, "devpost", "msg", "failed to auto-refresh event", "eventID", eventID, "err", err)
 				}
-			} else {
-				// slog.InfoContext(c.ctx, "devpost", "msg", "nothing to refresh")
 			}
 		}
 	}
@@ -313,6 +318,9 @@ func (c *cachedClient) autoRefreshLoop() {
 func (c *cachedClient) FetchProjects(ctx context.Context, eventID string) ([]*Project, error) {
 	c.mu.Lock()
 	e := c.events[eventID]
+	if e != nil {
+		e.LastRequested = time.Now()
+	}
 	c.mu.Unlock()
 	if e != nil && time.Since(e.LastRefresh) < c.freshness {
 		return e.Projects, nil
@@ -349,6 +357,9 @@ func (c *cachedClient) fetchProjects(ctx context.Context, eventID string) ([]*Pr
 	} else {
 		e = &Event{ID: eventID}
 		c.events[eventID] = e
+		// This is the first time this event is fetched, so we are in the context
+		// of a user request.
+		e.LastRequested = time.Now()
 	}
 	e.Projects = projects
 	e.LastRefresh = time.Now()
