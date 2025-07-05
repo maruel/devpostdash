@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
@@ -23,6 +24,9 @@ import (
 
 //go:embed templates/*.html
 var templatesFS embed.FS
+
+//go:embed all:static
+var staticFS embed.FS
 
 var templates = template.Must(template.New("").Funcs(template.FuncMap{"jsonMarshal": jsonMarshal}).ParseFS(templatesFS, "templates/*.html"))
 
@@ -264,7 +268,11 @@ func newWebServerHandler(d devpost.Client, r *roaster) http.Handler {
 	mux.HandleFunc("GET /event/{eventID}/{type}", w.handleEvent)
 	mux.HandleFunc("GET /api/events/{eventID}", w.apiEvent)
 	mux.HandleFunc("POST /api/roast", w.apiRoast)
-	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+	staticContent, err := fs.Sub(staticFS, "static")
+	if err != nil {
+		panic(err)
+	}
+	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticContent))))
 	return loggingMiddleware(mux)
 }
 
