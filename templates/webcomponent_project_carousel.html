@@ -160,7 +160,7 @@
 			this.observer.observe(this.container, {childList: true, subtree: true, attributes: true, attributeFilter: ['data-json']});
 
 			clearInterval(this.autoRotateInterval);
-			this.autoRotateInterval = setInterval(this.boundShowNext, 10000); // 10 seconds
+			this.autoRotateInterval = setInterval(this.boundShowNext, 20000); // 20 seconds
 		}
 
 		showNext() {
