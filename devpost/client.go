@@ -132,8 +132,26 @@ func (d *client) FetchProjects(ctx context.Context, eventID string) ([]*Project,
 	defer func() {
 		slog.InfoContext(ctx, "devpost", "projects", len(projects), "dur", time.Since(start), "err", err)
 	}()
+	/*
+		projects, err = d.fetchProjectsFromSubmissions(ctx, eventID)
+		if err != nil {
+			return nil, err
+		}
+		if len(projects) != 0 {
+			return projects, nil
+		}
+	*/
+	projects, err = d.fetchProjectsNew(ctx, eventID)
+	if err != nil {
+		return nil, err
+	}
+	return projects, nil
+}
+
+func (d *client) fetchProjectsFromSubmissions(ctx context.Context, eventID string) ([]*Project, error) {
+	var projects []*Project
+	var err error
 	for i := 1; ; i++ {
-		// url := "https://" + d.name + ".devpost.com/project-gallery"
 		url := fmt.Sprintf("https://%s.devpost.com/submissions/search?page=%d&sort=alpha&terms=&utf8=%%E2%%9C%%93", eventID, i)
 		var bod []byte
 		if bod, err = d.get(ctx, url); err != nil {
@@ -142,6 +160,34 @@ func (d *client) FetchProjects(ctx context.Context, eventID string) ([]*Project,
 		// A bit of a hack but good enough.
 		if bytes.Contains(bod, []byte("There are no submissions which match your criteria.")) {
 			break
+		}
+		if bytes.Contains(bod, []byte("The hackathon managers haven't published this gallery yet, but hang tight!")) {
+			break
+		}
+		var p []*Project
+		if p, err = parseProjects(bytes.NewReader(bod)); err != nil {
+			return projects, err
+		}
+		if len(p) == 0 {
+			break
+		}
+		projects = append(projects, p...)
+	}
+	return projects, nil
+}
+
+func (d *client) fetchProjectsNew(ctx context.Context, eventID string) ([]*Project, error) {
+	var projects []*Project
+	var err error
+	start := time.Now()
+	defer func() {
+		slog.InfoContext(ctx, "devpost", "projects_new", len(projects), "dur", time.Since(start), "err", err)
+	}()
+	for i := 1; ; i++ {
+		url := fmt.Sprintf("https://%s.devpost.com/project-gallery?page=%d", eventID, i)
+		var bod []byte
+		if bod, err = d.get(ctx, url); err != nil {
+			return projects, err
 		}
 		if bytes.Contains(bod, []byte("The hackathon managers haven't published this gallery yet, but hang tight!")) {
 			break
