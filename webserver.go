@@ -178,6 +178,7 @@ var devpostProject = devpost.Project{
 	Likes:       31337,
 	Tags:        []string{"devpost", "dashboard", "roast"},
 	Description: "This project fetches the data from devpost.com using webscraping. This is because devpost.com has no API. This is a bit frustrating. The server presents a nice interactive web UI that can be used during competitions.",
+	Image:       "/static/img/dancing-gopher.gif",
 }
 
 func (s *webserver) getProject(ctx context.Context, eventID, projectID string) (*devpost.Project, error) {
@@ -263,6 +264,7 @@ func newWebServerHandler(d devpost.Client, r *roaster) http.Handler {
 	mux.HandleFunc("GET /event/{eventID}/{type}", w.handleEvent)
 	mux.HandleFunc("GET /api/events/{eventID}", w.apiEvent)
 	mux.HandleFunc("POST /api/roast", w.apiRoast)
+	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 	return loggingMiddleware(mux)
 }
 
