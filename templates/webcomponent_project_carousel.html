@@ -150,10 +150,18 @@
 				card.classList.remove('active', 'prev', 'next');
 				if (index === this.currentIndex) {
 					card.classList.add('active');
-				} else if (index === (this.currentIndex + 1) % cards.length) {
-					card.classList.add('next');
-				} else if (index === (this.currentIndex - 1 + cards.length) % cards.length) {
-					card.classList.add('prev');
+				} else if (cards.length > 2) {
+					if (index === (this.currentIndex + 1) % cards.length) {
+						card.classList.add('next');
+					} else if (index === (this.currentIndex - 1 + cards.length) % cards.length) {
+						card.classList.add('prev');
+					}
+				} else if (cards.length === 2) {
+					// For two cards, the non-active card is always the 'next' one in a circular fashion.
+					// We don't need a separate 'prev' class as it would be the same card.
+					if (index === (this.currentIndex + 1) % cards.length) {
+						card.classList.add('next');
+					}
 				}
 			});
 			// Reconnect the observer after reordering is complete

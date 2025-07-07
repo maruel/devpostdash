@@ -146,6 +146,9 @@ func (s *webserver) apiRoast(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *webserver) getProjects(ctx context.Context, eventID string) ([]*devpost.Project, error) {
+	if eventID == "mock" {
+		return devpostProjects, nil
+	}
 	projects, err := s.d.FetchProjects(ctx, eventID)
 	if err != nil {
 		return nil, err
@@ -160,34 +163,55 @@ func (s *webserver) getProjects(ctx context.Context, eventID string) ([]*devpost
 		out = append(out, &p2)
 	}
 	if len(out) == 0 {
-		out = []*devpost.Project{&devpostProject}
+		out = devpostProjects
 	}
 	return out, nil
 }
 
-var devpostProject = devpost.Project{
-	ID:        "0",
-	ShortName: "devpostdash",
-	Title:     "Devpost Dashboard",
-	Tagline:   "Awesome dashboard for our hackathon",
-	URL:       "https://github.com/maruel/devpostdash",
-	Winner:    true,
-	Team: []devpost.Person{
-		{
-			Name:      "Marc-Antoine Ruel",
-			URL:       "https://devpost.com/maruel",
-			AvatarURL: "https://lh3.googleusercontent.com/a/ACg8ocLSOzFuWl-UhprsbeOvk-eYdoA-HngsePYGLguoUpKxO9dI-XLmzA=s96-c",
+var devpostProjects = []*devpost.Project{
+	{
+		ID:        "-1",
+		ShortName: "devpostdash",
+		Title:     "Devpost Dashboard",
+		Tagline:   "Awesome dashboard for our hackathon",
+		URL:       "https://github.com/maruel/devpostdash",
+		Winner:    true,
+		Team: []devpost.Person{
+			{
+				Name:      "Marc-Antoine Ruel",
+				URL:       "https://devpost.com/maruel",
+				AvatarURL: "https://lh3.googleusercontent.com/a/ACg8ocLSOzFuWl-UhprsbeOvk-eYdoA-HngsePYGLguoUpKxO9dI-XLmzA=s96-c",
+			},
 		},
+		Likes:       31337,
+		Tags:        []string{"devpost", "dashboard", "roast"},
+		Description: "This project fetches the data from devpost.com using webscraping. This is because devpost.com has no API. This is a bit frustrating. The server presents a nice interactive web UI that can be used during competitions.",
+		Image:       "/static/img/dancing-gopher.gif",
 	},
-	Likes:       31337,
-	Tags:        []string{"devpost", "dashboard", "roast"},
-	Description: "This project fetches the data from devpost.com using webscraping. This is because devpost.com has no API. This is a bit frustrating. The server presents a nice interactive web UI that can be used during competitions.",
-	Image:       "/static/img/dancing-gopher.gif",
+	{
+		ID:        "-2",
+		ShortName: "soon",
+		Title:     "You project here!",
+		Tagline:   "Awesome project created during the hackathon",
+		URL:       "https://example.com",
+		Team: []devpost.Person{
+			{
+				Name: "You",
+				URL:  "https://example.com",
+			},
+		},
+		Likes:       1,
+		Tags:        []string{"soon"},
+		Description: "Solve real world problems, or not, and win prizes!",
+	},
 }
 
 func (s *webserver) getProject(ctx context.Context, eventID, projectID string) (*devpost.Project, error) {
-	if projectID == "0" {
-		return &devpostProject, nil
+	if projectID == "-1" {
+		return devpostProjects[0], nil
+	}
+	if projectID == "-2" {
+		return devpostProjects[1], nil
 	}
 	projects, err := s.d.FetchProjects(ctx, eventID)
 	if err != nil {
